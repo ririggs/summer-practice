@@ -304,13 +304,59 @@ class Game:
         # Check if the cell is adjacent to the kitty (including diagonals)
         kitty_row, kitty_col = self.kitty_pos
         return abs(row - kitty_row) <= 1 and abs(col - kitty_col) <= 1 and (row, col) != self.kitty_pos
-
-
-    # Constants needed for this file
-GRID_SIZE = 7
-SCREEN_WIDTH = GRID_SIZE * 80 + (GRID_SIZE + 1) * 10
-SCREEN_HEIGHT = GRID_SIZE * 80 + (GRID_SIZE + 1) * 10 + 100
-FRUITS_PER_GAME = 3
+    
+    def collect_fruits(self):
+        # Collect selected fruits, remove mice on path, and update score
+        if len(self.selected_cells) > 1:  # Need at least 2 fruits to collect
+            # Calculate points to add
+            fruit_points = len(self.selected_cells)
+            mice_caught = sum(1 for mouse in self.mice if mouse in self.selected_cells)
+            mouse_points = mice_caught * 4
+            self.total_points_to_add = fruit_points + mouse_points
+            
+            # Set up score animation
+            self.score_animation_active = True
+            self.points_added_so_far = 0
+            self.displayed_score = self.fruits_collected
+            self.points_popup_text = f"+{self.total_points_to_add}"
+            self.points_popup_alpha = 255
+            self.points_popup_time = time.time()
+            
+            # Store old kitty position to fill with fruit later
+            self.old_kitty_pos = self.kitty_pos
+            
+            # Start kitty movement animation through the selected path
+            if self.selected_cells:
+                # Create animation path starting from kitty's current position
+                self.animation_path = [self.kitty_pos] + self.selected_cells
+                self.current_path_index = 0  # Start at the beginning of the path
+                
+                # Set up initial animation segment
+                self.kitty_start_pos = self.animation_path[0]
+                self.kitty_target_pos = self.animation_path[1]
+                self.kitty_current_pos = list(self.kitty_start_pos)  # Convert to list for floating point
+                self.kitty_animation_active = True
+                self.kitty_animation_start_time = time.time()
+                
+                # Store cells that need to be replaced with new fruits later
+                self.cells_to_replace = self.selected_cells.copy()
+            
+            # Increment moves
+            self.moves += 1
+            
+            # We'll add a mouse after the animation completes, not here
+            # Store if we need to add a mouse
+            self.should_add_mouse = (self.moves % 2 == 0)
+                
+            # Check if this is the final move (but don't end the game yet)
+            if self.moves >= MAX_MOVES:
+                self.elapsed_time = time.time() - self.start_time
+                # Set a flag to indicate this is the final move
+                # We'll handle the game over state after the animation completes
+                self.final_move = True
+                
+        # Clear selection
+        self.selected_cells = []
 
 # Mock objects for the file to run independently
 class MockImage:
