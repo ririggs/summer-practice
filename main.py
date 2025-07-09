@@ -254,7 +254,59 @@ class Game:
         kitty_row, kitty_col = self.kitty_pos
         return abs(row - kitty_row) <= 1 and abs(col - kitty_col) <= 1 and (row, col) != self.kitty_pos
 
-# Constants needed for this file
+    def is_valid_selection(self, row, col):
+        # Check if the cell can be selected
+
+        # Never allow selecting the kitty's current position
+        if (row, col) == self.kitty_pos:
+            return False
+
+        # If this is the first selection, it must be adjacent to the kitty
+        if not self.selected_cells:
+            return self.is_adjacent_to_kitty(row, col)
+
+        # For subsequent selections, check if it's adjacent to the last selected cell
+        last_row, last_col = self.selected_cells[-1]
+
+        # Check if it's adjacent to the last selected cell (including diagonals)
+        if abs(row - last_row) <= 1 and abs(col - last_col) <= 1:
+            # Check if it's a mouse (can always be selected)
+            if (row, col) in self.mice:
+                return (row, col) not in self.selected_cells  # Just make sure we haven't selected it already
+
+            # If not a mouse, check if it's the same fruit type as the first selection
+            if (row, col) not in self.selected_cells:  # Make sure it's not already selected
+                # Get the first fruit in the chain (skip mice)
+                first_fruit = None
+                for cell_row, cell_col in self.selected_cells:
+                    if (cell_row, cell_col) not in self.mice and self.board[cell_row][cell_col] is not None:
+                        first_fruit = self.board[cell_row][cell_col]
+                        break
+
+                # If we couldn't find a fruit in the chain yet, this is the first fruit
+                if first_fruit is None:
+                    return True
+
+                current_fruit = self.board[row][col]
+                # Make sure it's the same fruit type (if it's not None)
+                return current_fruit is None or current_fruit == first_fruit
+
+        return False
+
+    def is_mouse_on_path(self):
+        # Check if the selected path goes through any mice
+        for mouse in self.mice:
+            if mouse in self.selected_cells:
+                return True
+        return False
+
+    def is_adjacent_to_kitty(self, row, col):
+        # Check if the cell is adjacent to the kitty (including diagonals)
+        kitty_row, kitty_col = self.kitty_pos
+        return abs(row - kitty_row) <= 1 and abs(col - kitty_col) <= 1 and (row, col) != self.kitty_pos
+
+
+    # Constants needed for this file
 GRID_SIZE = 7
 SCREEN_WIDTH = GRID_SIZE * 80 + (GRID_SIZE + 1) * 10
 SCREEN_HEIGHT = GRID_SIZE * 80 + (GRID_SIZE + 1) * 10 + 100
