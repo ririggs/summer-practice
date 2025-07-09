@@ -358,6 +358,59 @@ class Game:
         # Clear selection
         self.selected_cells = []
 
+        def calculate_stars(self):
+        # Calculate stars based on score
+        self.stars_earned = 0
+        if self.fruits_collected < FRUIT_GOAL:
+            # Game lost, no stars
+            self.stars_earned = 0
+        else:
+            # Game won, calculate stars based on score
+            for threshold, stars in STAR_THRESHOLDS:
+                if self.fruits_collected >= threshold:
+                    self.stars_earned = stars
+    
+    def load_best_score(self):
+        try:
+            with open("game_history.txt", "r") as file:
+                lines = file.readlines()
+                for line in lines:
+                    parts = line.strip().split(", ")
+                    if len(parts) >= 4:  # Ensure we have enough parts
+                        try:
+                            score = int(parts[1].split(": ")[1])
+                            time_str = parts[3].split(": ")[1]
+                            time_val = sum(float(x) * 60 ** i for i, x in enumerate(reversed(time_str.split(":"))))
+                            
+                            # Update best score if higher
+                            if score > self.best_score:
+                                self.best_score = score
+                                
+                            # Update best time if this score is >= goal and time is better
+                            if score >= FRUIT_GOAL and time_val < self.best_time:
+                                self.best_time = time_val
+                        except (ValueError, IndexError):
+                            continue
+        except FileNotFoundError:
+            pass  # No history file yet
+    
+    def save_game_history(self):
+        # Save game history to file
+        with open("game_history.txt", "a") as file:
+            date_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            minutes = int(self.elapsed_time) // 60
+            seconds = int(self.elapsed_time) % 60
+            time_str = f"{minutes}:{seconds:02d}"
+            file.write(f"{date_time}, Score: {self.fruits_collected}, Moves: {self.moves}, Time: {time_str}, Stars: {self.stars_earned}\n")
+            
+        # Update best score and time
+        if self.fruits_collected > self.best_score:
+            self.best_score = self.fruits_collected
+            
+        if self.game_won and self.elapsed_time < self.best_time:
+            self.best_time = self.elapsed_time
+
+
 # Mock objects for the file to run independently
 class MockImage:
     def __init__(self):
