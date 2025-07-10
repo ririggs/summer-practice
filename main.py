@@ -410,10 +410,261 @@ class Game:
         if self.game_won and self.elapsed_time < self.best_time:
             self.best_time = self.elapsed_time
 
+    def draw_board(self):
+        # Fill the background
+        self.screen.fill(WHITE)
+
+        # Draw the grid and fruits
+        for row in range(GRID_SIZE):
+            for col in range(GRID_SIZE):
+                # Calculate position
+                x = col * (CELL_SIZE + MARGIN) + MARGIN
+                y = row * (CELL_SIZE + MARGIN) + MARGIN
+
+                # Draw cell background
+                cell_color = GRAY
+
+                # Highlight selected cells
+                if (row, col) in self.selected_cells:
+                    if (row, col) == self.selected_cells[-1]:
+                        cell_color = (100, 100, 255)  # Light blue for most recent
+                    else:
+                        cell_color = BLUE
+
+                pygame.draw.rect(self.screen, cell_color, (x, y, CELL_SIZE, CELL_SIZE))
+
+                # Draw fruit image (if there is one and no mouse or kitty)
+                fruit_type = self.board[row][col]
+                if fruit_type is not None and (row, col) not in self.mice and (row, col) != self.kitty_pos:
+                    fruit_image = self.fruit_images[fruit_type]
+                    fruit_rect = fruit_image.get_rect(center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2))
+                    self.screen.blit(fruit_image, fruit_rect)
+
+                # Draw mouse if present
+                if (row, col) in self.mice:
+                    mouse_rect = MOUSE_IMAGE.get_rect(center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2))
+                    self.screen.blit(MOUSE_IMAGE, mouse_rect)
+
+        # Update kitty animation if active
+        if self.kitty_animation_active:
+            self.update_kitty_animation()
+
+        # Update fruit replacement animation if active
+        if self.fruit_replacement_active:
+            self.update_fruit_replacement()
+
+        # Update score animation if active
+        if self.score_animation_active:
+            self.update_score_animation()
+
+        # Draw kitty at its current position (animated or static)
+        if self.kitty_animation_active:
+            # Draw kitty at animated position
+            row, col = self.kitty_current_pos
+            x = col * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            y = row * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            kitty_rect = KITTY_IMAGE.get_rect(center=(x, y))
+            self.screen.blit(KITTY_IMAGE, kitty_rect)
+        else:
+            # Draw kitty at static position
+            row, col = self.kitty_pos
+            x = col * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            y = row * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            kitty_rect = KITTY_IMAGE.get_rect(center=(x, y))
+            self.screen.blit(KITTY_IMAGE, kitty_rect)
+
+        # Draw direction arrows between selected cells
+        self.draw_direction_arrows()
+
+        # Draw UI elements
+        current_time = time.time() - self.start_time if not self.game_over else self.elapsed_time
+
+        # Draw score and goal
+        score_text = self.font.render(f"Score: {self.displayed_score}/{FRUIT_GOAL}", True, BLACK)
+        score_rect = score_text.get_rect(topleft=(20, SCREEN_HEIGHT - 80))
+        self.screen.blit(score_text, score_rect)
+
+        # Draw points popup if active
+        if self.score_animation_active and self.points_popup_alpha > 0:
+            popup_font = self.font
+            popup_text = popup_font.render(self.points_popup_text, True, (50, 205, 50))
+            popup_text.set_alpha(self.points_popup_alpha)
+            # Position next to score
+            popup_rect = popup_text.get_rect(left=score_rect.right + 10, centery=score_rect.centery)
+            self.screen.blit(popup_text, popup_rect)
+
+        # Draw timer
+        minutes = int(current_time) // 60
+        seconds = int(current_time) % 60
+        time_text = self.font.render(f"Time: {minutes}:{seconds:02d}", True, BLACK)
+        self.screen.blit(time_text, (SCREEN_WIDTH - 150, SCREEN_HEIGHT - 80))
+
+        # Draw moves
+        moves_text = self.small_font.render(f"Moves: {self.moves}/{MAX_MOVES}", True,
+                                            RED if self.moves >= MAX_MOVES - 2 else BLACK)
+        self.screen.blit(moves_text, (20, SCREEN_HEIGHT - 40))
+
+        # Draw best score/time
+        if self.best_score > 0:
+            best_score_text = self.small_font.render(f"Best: {self.best_score} points", True, BLUE)
+            self.screen.blit(best_score_text, (SCREEN_WIDTH - 150, SCREEN_HEIGHT - 40))
+
+        # Draw collect button
+        button_color = LIGHT_GREEN if len(self.selected_cells) > 1 else GRAY
+        pygame.draw.rect(self.screen, button_color, self.collect_button_rect, border_radius=5)
+        pygame.draw.rect(self.screen, BLACK, self.collect_button_rect, 2, border_radius=5)
+
+        collect_text = self.font.render("Collect", True, BLACK)
+        text_rect = collect_text.get_rect(center=self.collect_button_rect.center)
+        self.screen.blit(collect_text, text_rect)
+
+        # Draw results screen if game is over
+        if self.game_over:
+            if self.animation_in_progress:
+                self.update_animation()
+            self.draw_results_screen()
+
+    def draw_direction_arrows(self):
+        # Draw arrows showing the direction between consecutive selected cells
+        if not self.selected_cells:
+            return
+
+        # First, draw an arrow from kitty's position to the first selected cell
+        start_cell = self.kitty_pos
+        end_cell = self.selected_cells[0]
+
+        # Calculate center positions of cells
+        start_x = start_cell[1] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+        start_y = start_cell[0] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+        end_x = end_cell[1] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+        end_y = end_cell[0] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+
+        # Calculate midpoint between cells for arrow placement
+        mid_x = (start_x + end_x) // 2
+        mid_y = (start_y + end_y) // 2
+
+        # Calculate angle between cells
+        angle = calculate_angle(start_cell, end_cell)
+
+        # Rotate arrow image
+        rotated_arrow = pygame.transform.rotate(ARROW_IMAGE, -angle)  # Negative for clockwise rotation
+        arrow_rect = rotated_arrow.get_rect(center=(mid_x, mid_y))
+
+        # Draw arrow
+        self.screen.blit(rotated_arrow, arrow_rect)
+
+        # Then draw arrows between consecutive selected cells
+        if len(self.selected_cells) < 2:
+            return
+
+        for i in range(len(self.selected_cells) - 1):
+            start_cell = self.selected_cells[i]
+            end_cell = self.selected_cells[i + 1]
+
+            # Calculate center positions of cells
+            start_x = start_cell[1] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            start_y = start_cell[0] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            end_x = end_cell[1] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            end_y = end_cell[0] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+
+            # Calculate midpoint between cells for arrow placement
+            mid_x = (start_x + end_x) // 2
+            mid_y = (start_y + end_y) // 2
+
+            # Calculate angle between cells
+            angle = calculate_angle(start_cell, end_cell)
+
+            # Rotate arrow image
+            rotated_arrow = pygame.transform.rotate(ARROW_IMAGE, -angle)  # Negative for clockwise rotation
+            arrow_rect = rotated_arrow.get_rect(center=(mid_x, mid_y))
+
+            # Draw arrow
+            self.screen.blit(rotated_arrow, arrow_rect)
+
+    def draw_results_screen(self):
+        # Create a semi-transparent overlay with current alpha
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, self.dim_alpha))  # Variable opacity black
+        self.screen.blit(overlay, (0, 0))
+
+        # Create results panel
+        panel_width = 400
+        panel_height = 300
+        panel_x = (SCREEN_WIDTH - panel_width) // 2
+        panel_y = self.panel_y_offset
+
+        # Draw panel background
+        pygame.draw.rect(self.screen, WHITE, (panel_x, panel_y, panel_width, panel_height), border_radius=10)
+        pygame.draw.rect(self.screen, BLACK, (panel_x, panel_y, panel_width, panel_height), 2, border_radius=10)
+
+        # Draw game result
+        if self.fruits_collected >= FRUIT_GOAL:
+            result_text = self.large_font.render("VICTORY!", True, GREEN)
+        else:
+            result_text = self.large_font.render("GAME OVER", True, RED)
+
+        result_rect = result_text.get_rect(center=(panel_x + panel_width // 2, panel_y + 40))
+        self.screen.blit(result_text, result_rect)
+
+        # Update counter animation if active
+        if self.counter_animation_active:
+            self.update_counter_animation()
+
+        # Draw score with counter animation
+        score_text = self.font.render(f"Fruits collected: {self.displayed_score}", True, BLACK)
+        score_rect = score_text.get_rect(center=(panel_x + panel_width // 2, panel_y + 80))
+        self.screen.blit(score_text, score_rect)
+
+        # Draw stars
+        star_y = panel_y + 130
+        star_spacing = 70
+
+        # Draw 3 stars (filled or empty based on animated score)
+        for i in range(3):
+            star_x = panel_x + panel_width // 2 - star_spacing + i * star_spacing
+            if i < self.stars_shown:
+                star_image = FILLED_STAR
+            else:
+                star_image = EMPTY_STAR
+
+            star_rect = star_image.get_rect(center=(star_x, star_y))
+            self.screen.blit(star_image, star_rect)
+
+        # Draw star thresholds
+        threshold_text = self.small_font.render(
+            f"0★: 75-85 | 1★: 86-95 | 2★: 96-105 | 3★: 106+",
+            True, BLACK
+        )
+        threshold_rect = threshold_text.get_rect(center=(panel_x + panel_width // 2, panel_y + 180))
+        self.screen.blit(threshold_text, threshold_rect)
+
+        # Draw time
+        minutes = int(self.elapsed_time) // 60
+        seconds = int(self.elapsed_time) % 60
+        time_text = self.font.render(f"Time: {minutes}:{seconds:02d}", True, BLACK)
+        time_rect = time_text.get_rect(center=(panel_x + panel_width // 2, panel_y + 220))
+        self.screen.blit(time_text, time_rect)
+
+        # Draw restart instruction
+        restart_text = self.font.render("Press R to restart", True, BLUE)
+        restart_rect = restart_text.get_rect(center=(panel_x + panel_width // 2, panel_y + 260))
+        self.screen.blit(restart_text, restart_rect)
+
 
 # Mock objects for the file to run independently
 class MockImage:
     def __init__(self):
         pass
         
-ALL_FRUIT_IMAGES = {"apple": MockImage(), "orange": MockImage(), "banana": MockImage()} 
+ALL_FRUIT_IMAGES = {"apple": MockImage(), "orange": MockImage(), "banana": MockImage()}
+
+# Mock functions
+def calculate_angle(start_pos, end_pos):
+    return 0
+
+# Mock images
+MOUSE_IMAGE = None
+KITTY_IMAGE = None
+ARROW_IMAGE = None
+EMPTY_STAR = None
+FILLED_STAR = None
