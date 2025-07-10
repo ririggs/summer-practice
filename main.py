@@ -844,9 +844,58 @@ class Game:
                     # Animation complete
                     self.score_animation_active = False
                     self.points_popup_alpha = 0
-    
+
+
     def run(self):
         running = True
+        
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                    
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_r and self.game_over:  # Restart game
+                        self.reset_game()
+                        
+                elif event.type == pygame.MOUSEBUTTONDOWN and not self.game_over:
+                    pos = pygame.mouse.get_pos()
+                    
+                    # Check if collect button was clicked
+                    if self.collect_button_rect.collidepoint(pos):
+                        self.collect_fruits()
+                        continue
+                        
+                    # Convert position to grid coordinates
+                    col = (pos[0] - MARGIN) // (CELL_SIZE + MARGIN)
+                    row = (pos[1] - MARGIN) // (CELL_SIZE + MARGIN)
+                    
+                    # Check if click is within the grid
+                    if 0 <= row < GRID_SIZE and 0 <= col < GRID_SIZE:
+                        # Check if cell is already selected
+                        if (row, col) in self.selected_cells:
+                            # Find the index of the clicked cell in the selection
+                            index = self.selected_cells.index((row, col))
+                            # Remove this cell and all cells after it
+                            self.selected_cells = self.selected_cells[:index]
+                        # Otherwise check if it's a valid selection
+                        elif self.is_valid_selection(row, col):
+                            self.selected_cells.append((row, col))
+            
+            # Draw the board
+            self.draw_board()
+            
+            # Update display
+            pygame.display.flip()
+            
+            # Cap the frame rate
+            self.clock.tick(60)
+        
+        pygame.quit()
+        sys.exit()
+
+
+
         
         while running:
             for event in pygame.event.get():
@@ -896,4 +945,5 @@ class Game:
 if __name__ == "__main__":
     game = Game()
     game.run() 
+
 
