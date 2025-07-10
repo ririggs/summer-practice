@@ -33,14 +33,15 @@ MAX_MOVES = 10
 FRUIT_GOAL = 75
 FRUITS_PER_GAME = 3  # Number of fruit types to use in each game
 
-# Star rating thresholds
+# Constants needed for this file
+SCREEN_HEIGHT = 700
+FRUIT_GOAL = 75
 STAR_THRESHOLDS = [
     (0, 0),     # 0 stars: 0-85 points
     (86, 1),    # 1 star: 86-95 points
     (96, 2),    # 2 stars: 96-105 points
     (106, 3)    # 3 stars: 106+ points
 ]
-
 
 # Load images
 def load_image(filename, subdirectory=None):
@@ -650,6 +651,212 @@ class Game:
         restart_rect = restart_text.get_rect(center=(panel_x + panel_width // 2, panel_y + 260))
         self.screen.blit(restart_text, restart_rect)
 
+    def update_animation(self):
+        # Update animation values based on time elapsed since animation started
+        elapsed = time.time() - self.animation_start_time
+
+        # Dim animation duration: 0.7 seconds (30% faster than 1 second)
+        dim_duration = 0.7
+        # Panel slide animation duration: 1.05 seconds (30% faster than 1.5 seconds), starting after 0.35s (30% faster than 0.5s)
+        panel_duration = 1.05
+        panel_delay = 0.35
+
+        # Update dim alpha
+        if elapsed < dim_duration:
+            # Gradually increase from 0 to 180
+            self.dim_alpha = int(180 * (elapsed / dim_duration))
+        else:
+            self.dim_alpha = 180
+
+        # Update panel position
+        if elapsed > panel_delay:
+            panel_elapsed = elapsed - panel_delay
+            if panel_elapsed < panel_duration:
+                # Calculate target y position (centered vertically)
+                panel_height = 300
+                target_y = (SCREEN_HEIGHT - panel_height) // 2
+
+                # Ease-out function for smoother deceleration
+                progress = panel_elapsed / panel_duration
+                ease_factor = 1 - (1 - progress) * (1 - progress)  # Quadratic ease out
+
+                # Interpolate from off-screen to target position
+                self.panel_y_offset = -400 + (target_y + 400) * ease_factor
+            else:
+                # Animation complete
+                panel_height = 300
+                self.panel_y_offset = (SCREEN_HEIGHT - panel_height) // 2
+                self.animation_in_progress = False
+                self.show_results = True
+
+                # Start counter animation
+                if not self.counter_animation_active:
+                    self.counter_animation_active = True
+                    self.counter_start_time = time.time()
+                    self.displayed_score = 0
+                    self.stars_shown = 0
+
+    def update_counter_animation(self):
+        if not self.counter_animation_active:
+            return
+
+        # Duration for counter animation (2 seconds)
+        counter_duration = 2.0
+        elapsed = time.time() - self.counter_start_time
+
+        if elapsed < counter_duration:
+            # Calculate current score to display (with easing)
+            progress = elapsed / counter_duration
+            ease_factor = 1 - (1 - progress) * (1 - progress)  # Quadratic ease out
+            self.displayed_score = int(self.fruits_collected * ease_factor)
+
+            # Calculate stars to show based on thresholds
+            self.stars_shown = 0
+            for threshold, stars in STAR_THRESHOLDS:
+                if self.displayed_score >= threshold:
+                    self.stars_shown = stars
+        else:
+            # Animation complete
+            self.displayed_score = self.fruits_collected
+            self.stars_shown = self.stars_earned
+            self.counter_animation_active = False
+
+    def update_kitty_animation(self):
+        if not self.kitty_animation_active:
+            return
+
+        # Animation duration for each segment (0.2 seconds per cell)
+        animation_duration = 0.2
+        elapsed = time.time() - self.kitty_animation_start_time
+
+        if elapsed < animation_duration:
+            # Calculate progress with easing
+            progress = elapsed / animation_duration
+            # Use ease-out function for smoother movement
+            ease_factor = 1 - (1 - progress) * (1 - progress)  # Quadratic ease out
+
+            # Interpolate between start and target positions
+            start_row, start_col = self.kitty_start_pos
+            target_row, target_col = self.kitty_target_pos
+
+            # Update current position (floating point for smooth animation)
+            self.kitty_current_pos[0] = start_row + (target_row - start_row) * ease_factor
+            self.kitty_current_pos[1] = start_col + (target_col - start_col) * ease_factor
+        else:
+            # Current segment complete
+
+            # Remove fruit from the cell the kitty just landed on
+            cell_pos = self.animation_path[self.current_path_index + 1]  # The cell we just moved to
+            row, col = cell_pos
+
+            # Only remove fruit if this is a selected cell (not the kitty's starting position)
+            if cell_pos in self.cells_to_replace:
+                self.board[row][col] = None
+
+                # Check if there's a mouse at this position and remove it
+                if cell_pos in self.mice:
+                    # Remove the mouse only when the kitty actually reaches it
+                    self.mice.remove(cell_pos)
+                    points_for_this_cell = 4  # Mouse
+                else:
+                    points_for_this_cell = 1  # Regular fruit
+
+                # Update displayed score and points added so far
+                self.points_added_so_far += points_for_this_cell
+                self.displayed_score = self.fruits_collected + self.points_added_so_far
+
+            self.current_path_index += 1
+
+            # Check if we've reached the end of the path
+            if self.current_path_index >= len(self.animation_path) - 1:
+                # Animation complete - set final position
+                self.kitty_pos = self.animation_path[-1]
+                self.kitty_animation_active = False
+
+                # Start fruit replacement animation with delay
+                self.fruit_replacement_active = True
+                self.fruit_replacement_start_time = time.time()
+
+                # Update actual score now
+                self.fruits_collected += self.total_points_to_add
+                self.score += self.total_points_to_add
+            else:
+                # Move to next segment
+                self.kitty_start_pos = self.animation_path[self.current_path_index]
+                self.kitty_target_pos = self.animation_path[self.current_path_index + 1]
+                self.kitty_current_pos = list(self.kitty_start_pos)  # Reset current position
+                self.kitty_animation_start_time = time.time()  # Reset timer for next segment
+
+    def update_fruit_replacement(self):
+        if not self.fruit_replacement_active:
+            return
+
+        # Wait for 0.5 second after kitty reaches final position before replacing fruits
+        delay = 0.5
+        elapsed = time.time() - self.fruit_replacement_start_time
+
+        if elapsed >= delay:
+            # Add a mouse if needed (every 2 moves)
+            if self.should_add_mouse and not self.game_over:
+                self.add_mouse()
+                self.should_add_mouse = False
+
+            # Replace collected fruits with new ones (except kitty's final position)
+            for row, col in self.cells_to_replace:
+                if (row, col) != self.kitty_pos:  # Don't place fruit where kitty is
+                    self.board[row][col] = random.choice(self.fruits)
+
+            # Fill the old kitty position with a fruit (if it's not part of the cells to replace)
+            if self.old_kitty_pos and self.old_kitty_pos not in self.cells_to_replace:
+                old_row, old_col = self.old_kitty_pos
+                self.board[old_row][old_col] = random.choice(self.fruits)
+
+            # Score is already updated in update_kitty_animation, no need to update it again here
+
+            # Check if this was the final move
+            if self.final_move:
+                # Set game over state
+                self.game_over = True
+                self.game_won = self.fruits_collected >= FRUIT_GOAL
+
+                # Calculate stars earned
+                self.calculate_stars()
+
+                # Start the result animation
+                self.animation_start_time = time.time()
+                self.animation_in_progress = True
+                self.dim_alpha = 0
+                self.panel_y_offset = -400
+
+                # Save game history with the final score
+                self.save_game_history()
+
+            # Animation complete
+            self.fruit_replacement_active = False
+            self.cells_to_replace = []
+            self.old_kitty_pos = None
+
+            # End score animation after 2 more seconds
+            self.points_popup_time = time.time()
+
+    def update_score_animation(self):
+        if not self.score_animation_active:
+            return
+
+        # Keep the popup visible for 1.5 seconds after fruit replacement (50% faster than before)
+        if not self.kitty_animation_active and not self.fruit_replacement_active:
+            elapsed = time.time() - self.points_popup_time
+            if elapsed > 1.0:  # Start fading after 1 second (was 2)
+                # Start fading out
+                fade_duration = 0.5  # Fade over 0.5 seconds (was 1.0)
+                if elapsed < 1.5:  # Complete fade by 1.5 seconds (was 3.0)
+                    fade_progress = (elapsed - 1.0) / fade_duration
+                    self.points_popup_alpha = int(255 * (1 - fade_progress))
+                else:
+                    # Animation complete
+                    self.score_animation_active = False
+                    self.points_popup_alpha = 0
+
 
 # Mock objects for the file to run independently
 class MockImage:
@@ -668,3 +875,4 @@ KITTY_IMAGE = None
 ARROW_IMAGE = None
 EMPTY_STAR = None
 FILLED_STAR = None
+
