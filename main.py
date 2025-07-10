@@ -34,14 +34,15 @@ DARK_BLUE = (50, 50, 200)
 MAX_MOVES = 10
 FOOD_GOAL = 75
 FOOD_ITEMS_PER_GAME = 3  # Number of food types to use in each game
-SETTINGS_FILE = "game_settings.txt"  # File to store settings
+SETTINGS_FILE = "game_settings.json"  # File to store settings
+HISTORY_FILE = "game_history.json"   # File to store game history
 
 # Star rating thresholds
 STAR_THRESHOLDS = [
-    (0, 0),     # 0 stars: 0-85 points
-    (86, 1),    # 1 star: 86-95 points
-    (96, 2),    # 2 stars: 96-105 points
-    (106, 3)    # 3 stars: 106+ points
+    (0, 0),     # 0 stars: 0-74 points
+    (75, 1),    # 1 star: 75-95 points
+    (96, 2),    # 2 stars: 96-120 points
+    (121, 3)    # 3 stars: 121+ points
 ]
 
 # Default game settings
@@ -78,6 +79,38 @@ def save_settings(settings):
             print("Settings saved successfully")
     except Exception as e:
         print(f"Error saving settings: {e}")
+
+# Load game history from file
+def load_game_history():
+    try:
+        with open(HISTORY_FILE, "r") as file:
+            return json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Error loading game history: {e}. Creating new history.")
+        return []
+
+# Save game history to file
+def save_game_history(history):
+    try:
+        with open(HISTORY_FILE, "w") as file:
+            json.dump(history, file, indent=4)
+            print("Game history saved successfully")
+    except Exception as e:
+        print(f"Error saving game history: {e}")
+
+# Get best score from history
+def get_best_score():
+    history = load_game_history()
+    if not history:
+        return 0, float('inf')
+    
+    best_score = max([game["score"] for game in history])
+    
+    # Find best time for winning games
+    winning_games = [game for game in history if game["score"] >= FOOD_GOAL]
+    best_time = min([game["time"] for game in winning_games]) if winning_games else float('inf')
+    
+    return best_score, best_time
 
 # Game settings (load from file or use defaults)
 SETTINGS = load_settings()
@@ -562,6 +595,252 @@ class Settings:
         # Save to file
         save_settings(SETTINGS)
 
+class Records:
+    def __init__(self, screen):
+        self.screen = screen
+        self.running = True
+        self.font = pygame.font.SysFont("Arial", 24)
+        self.title_font = pygame.font.SysFont("Arial", 36)
+        self.small_font = pygame.font.SysFont("Arial", 18)
+        
+        # Create back button
+        self.back_button = Button(
+            SCREEN_WIDTH // 2 - 100,
+            SCREEN_HEIGHT - 60,
+            200,
+            40,
+            "Back",
+            self.font
+        )
+        
+        # Load game history
+        self.history = load_game_history()
+        
+    def run(self):
+        clock = pygame.time.Clock()
+        
+        while self.running:
+            mouse_pos = pygame.mouse.get_pos()
+            
+            # Check for hover state changes
+            hover_changed = self.back_button.check_hover(mouse_pos)
+            
+            # Play sound on hover change
+            if hover_changed and TAP_SOUND:
+                TAP_SOUND.play()
+            
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    pygame.quit()
+                    sys.exit()
+                    
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.running = False
+                        return
+                        
+                # Check back button
+                if self.back_button.is_clicked(mouse_pos, event):
+                    self.running = False
+                    return
+            
+            # Draw the records screen
+            self.screen.fill(WHITE)
+            
+            # Draw title
+            title_text = self.title_font.render("Game Records", True, DARK_BLUE)
+            title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 40))
+            self.screen.blit(title_text, title_rect)
+            
+            # Draw top-5 table
+            self.draw_top_records()
+            
+            # Draw bar chart
+            self.draw_bar_chart()
+            
+            # Draw back button
+            self.back_button.draw(self.screen)
+            
+            pygame.display.flip()
+            clock.tick(60)
+    
+    def draw_top_records(self):
+        # Draw table header
+        table_width = 600
+        table_x = (SCREEN_WIDTH - table_width) // 2
+        table_y = 100
+        row_height = 40
+        
+        # Draw table background
+        table_height = 6 * row_height  # Header + 5 rows
+        pygame.draw.rect(self.screen, LIGHT_BLUE, (table_x, table_y, table_width, table_height), border_radius=5)
+        pygame.draw.rect(self.screen, BLACK, (table_x, table_y, table_width, table_height), 2, border_radius=5)
+        
+        # Draw header
+        header_y = table_y + 10
+        headers = ["Rank", "Date", "Score", "Time", "Stars"]
+        col_widths = [0.1, 0.4, 0.2, 0.15, 0.15]  # Proportions of table width
+        
+        for i, header in enumerate(headers):
+            col_x = table_x + sum(col_widths[:i]) * table_width
+            col_width = col_widths[i] * table_width
+            text = self.font.render(header, True, BLACK)
+            text_rect = text.get_rect(center=(col_x + col_width/2, header_y))
+            self.screen.blit(text, text_rect)
+        
+        # Draw separator line
+        pygame.draw.line(self.screen, BLACK, (table_x, table_y + row_height), (table_x + table_width, table_y + row_height), 2)
+        
+        # Sort history by score (descending)
+        sorted_history = sorted(self.history, key=lambda x: x["score"], reverse=True)
+        
+        # Draw top 5 records
+        for i in range(min(5, len(sorted_history))):
+            record = sorted_history[i]
+            row_y = table_y + (i + 1) * row_height + 10
+            
+            # Rank
+            text = self.font.render(f"{i+1}", True, BLACK)
+            col_x = table_x + col_widths[0] * table_width / 2
+            text_rect = text.get_rect(center=(col_x, row_y))
+            self.screen.blit(text, text_rect)
+            
+            # Date
+            date_str = datetime.fromtimestamp(record["timestamp"]).strftime("%Y-%m-%d %H:%M")
+            text = self.small_font.render(date_str, True, BLACK)
+            col_x = table_x + col_widths[0] * table_width + col_widths[1] * table_width / 2
+            text_rect = text.get_rect(center=(col_x, row_y))
+            self.screen.blit(text, text_rect)
+            
+            # Score
+            text = self.font.render(f"{record['score']}", True, BLACK)
+            col_x = table_x + sum(col_widths[:2]) * table_width + col_widths[2] * table_width / 2
+            text_rect = text.get_rect(center=(col_x, row_y))
+            self.screen.blit(text, text_rect)
+            
+            # Time
+            minutes = int(record["time"]) // 60
+            seconds = int(record["time"]) % 60
+            text = self.font.render(f"{minutes}:{seconds:02d}", True, BLACK)
+            col_x = table_x + sum(col_widths[:3]) * table_width + col_widths[3] * table_width / 2
+            text_rect = text.get_rect(center=(col_x, row_y))
+            self.screen.blit(text, text_rect)
+            
+            # Stars
+            stars_x = table_x + sum(col_widths[:4]) * table_width + col_widths[4] * table_width / 2
+            self.draw_stars(stars_x, row_y, record["stars"])
+    
+    def draw_stars(self, x, y, stars_count):
+        star_size = 20
+        spacing = 5
+        total_width = stars_count * star_size + (stars_count - 1) * spacing
+        start_x = x - total_width / 2
+        
+        for i in range(stars_count):
+            star_x = start_x + i * (star_size + spacing)
+            star_rect = FILLED_STAR.get_rect(topleft=(star_x, y - star_size/2))
+            star_image = pygame.transform.scale(FILLED_STAR, (star_size, star_size))
+            self.screen.blit(star_image, star_rect)
+    
+    def draw_bar_chart(self):
+        # Draw line graph of last 10 games
+        chart_width = 600
+        chart_height = 200
+        chart_x = (SCREEN_WIDTH - chart_width) // 2
+        chart_y = 350
+        
+        # Draw chart background
+        pygame.draw.rect(self.screen, GRAY, (chart_x, chart_y, chart_width, chart_height), border_radius=5)
+        pygame.draw.rect(self.screen, BLACK, (chart_x, chart_y, chart_width, chart_height), 2, border_radius=5)
+        
+        # Draw chart title
+        title_text = self.font.render("Score History (Last 10 Games)", True, BLACK)
+        title_rect = title_text.get_rect(midtop=(chart_x + chart_width/2, chart_y - 30))
+        self.screen.blit(title_text, title_rect)
+        
+        # Get last 10 games
+        recent_games = sorted(self.history, key=lambda x: x["timestamp"])[-10:]
+        if not recent_games:
+            # Draw "No data" message
+            no_data_text = self.font.render("No game history data available", True, BLACK)
+            no_data_rect = no_data_text.get_rect(center=(chart_x + chart_width/2, chart_y + chart_height/2))
+            self.screen.blit(no_data_text, no_data_rect)
+            return
+        
+        # Find max score for scaling
+        max_score = max([game["score"] for game in recent_games])
+        max_score = max(max_score, FOOD_GOAL)  # Ensure goal line is visible
+        
+        # Draw grid lines
+        grid_color = (220, 220, 220)  # Light gray
+        grid_steps = 5
+        for i in range(grid_steps + 1):
+            # Horizontal grid lines
+            y_pos = chart_y + chart_height - 30 - (i * (chart_height - 50) / grid_steps)
+            pygame.draw.line(self.screen, grid_color, (chart_x + 10, y_pos), (chart_x + chart_width - 10, y_pos), 1)
+            
+            # Draw y-axis labels
+            score_value = int((i / grid_steps) * max_score)
+            score_label = self.small_font.render(str(score_value), True, BLACK)
+            label_rect = score_label.get_rect(midright=(chart_x + 5, y_pos))
+            self.screen.blit(score_label, label_rect)
+        
+        # Calculate positions for dots
+        dot_radius = 6
+        dot_positions = []
+        point_spacing = (chart_width - 40) / (len(recent_games) - 1) if len(recent_games) > 1 else 0
+        bar_bottom = chart_y + chart_height - 30
+        
+        for i, game in enumerate(recent_games):
+            # Calculate dot position
+            score = game["score"]
+            x_pos = chart_x + 20 + (i * point_spacing) if len(recent_games) > 1 else chart_x + chart_width / 2
+            y_pos = bar_bottom - (score / max_score) * (chart_height - 50)
+            
+            dot_positions.append((x_pos, y_pos, score))
+            
+            # Draw date below x-axis
+            date_str = datetime.fromtimestamp(game["timestamp"]).strftime("%m-%d")
+            date_text = self.small_font.render(date_str, True, BLACK)
+            date_rect = date_text.get_rect(midtop=(x_pos, bar_bottom + 5))
+            self.screen.blit(date_text, date_rect)
+        
+        # Draw connecting lines between dots
+        if len(dot_positions) > 1:
+            for i in range(len(dot_positions) - 1):
+                start_x, start_y, _ = dot_positions[i]
+                end_x, end_y, _ = dot_positions[i + 1]
+                pygame.draw.line(self.screen, BLUE, (start_x, start_y), (end_x, end_y), 2)
+        
+        # Draw dots and score labels
+        for x_pos, y_pos, score in dot_positions:
+            # Draw dot with color based on whether goal was reached
+            dot_color = GREEN if score >= FOOD_GOAL else BLUE
+            pygame.draw.circle(self.screen, dot_color, (x_pos, y_pos), dot_radius)
+            pygame.draw.circle(self.screen, BLACK, (x_pos, y_pos), dot_radius, 1)  # Outline
+            
+            # Draw score above dot
+            score_text = self.small_font.render(str(score), True, BLACK)
+            score_rect = score_text.get_rect(midbottom=(x_pos, y_pos - 10))
+            
+            # Draw white background behind text for better readability
+            padding = 2
+            bg_rect = score_rect.inflate(padding * 2, padding * 2)
+            pygame.draw.rect(self.screen, WHITE, bg_rect)
+            pygame.draw.rect(self.screen, BLACK, bg_rect, 1)
+            
+            self.screen.blit(score_text, score_rect)
+        
+        # Draw goal line
+        goal_y = bar_bottom - (FOOD_GOAL / max_score) * (chart_height - 50)
+        pygame.draw.line(self.screen, RED, (chart_x + 10, goal_y), (chart_x + chart_width - 10, goal_y), 2)
+        
+        # Draw goal label
+        goal_text = self.small_font.render(f"Goal: {FOOD_GOAL}", True, RED)
+        goal_rect = goal_text.get_rect(midright=(chart_x + chart_width - 15, goal_y - 5))
+        self.screen.blit(goal_text, goal_rect)
+
 class MainMenu:
     def __init__(self, screen):
         self.screen = screen
@@ -574,7 +853,7 @@ class MainMenu:
         button_width = 300
         button_height = 60
         button_spacing = 30
-        start_y = SCREEN_HEIGHT // 2 - 50
+        start_y = SCREEN_HEIGHT // 2 - 80  # Moved up to make room for Records button
         
         self.play_button = Button(
             SCREEN_WIDTH // 2 - button_width // 2,
@@ -585,9 +864,18 @@ class MainMenu:
             self.font
         )
         
-        self.settings_button = Button(
+        self.records_button = Button(
             SCREEN_WIDTH // 2 - button_width // 2,
             start_y + button_height + button_spacing,
+            button_width,
+            button_height,
+            "Records",
+            self.font
+        )
+        
+        self.settings_button = Button(
+            SCREEN_WIDTH // 2 - button_width // 2,
+            start_y + 2 * (button_height + button_spacing),
             button_width,
             button_height,
             "Settings",
@@ -596,7 +884,7 @@ class MainMenu:
         
         self.quit_button = Button(
             SCREEN_WIDTH // 2 - button_width // 2,
-            start_y + 2 * (button_height + button_spacing),
+            start_y + 3 * (button_height + button_spacing),
             button_width,
             button_height,
             "Quit",
@@ -670,6 +958,7 @@ class MainMenu:
             
             if not self.show_instructions:
                 hover_changed |= self.play_button.check_hover(mouse_pos)
+                hover_changed |= self.records_button.check_hover(mouse_pos)
                 hover_changed |= self.settings_button.check_hover(mouse_pos)
                 hover_changed |= self.quit_button.check_hover(mouse_pos)
                 hover_changed |= self.help_button.check_hover(mouse_pos)
@@ -695,6 +984,11 @@ class MainMenu:
                         game = Game()
                         game.run()
                         # When game exits, we're back at the menu
+                    
+                    elif self.records_button.is_clicked(mouse_pos, event):
+                        # Show records screen
+                        records_screen = Records(self.screen)
+                        records_screen.run()
                         
                     elif self.settings_button.is_clicked(mouse_pos, event):
                         # Open settings screen
@@ -727,6 +1021,7 @@ class MainMenu:
             # Draw buttons if not showing instructions
             if not self.show_instructions:
                 self.play_button.draw(self.screen)
+                self.records_button.draw(self.screen)
                 self.settings_button.draw(self.screen)
                 self.quit_button.draw(self.screen)
                 self.help_button.draw(self.screen)
@@ -756,9 +1051,7 @@ class Game:
         )
         
         # Load best score and time
-        self.best_score = 0
-        self.best_time = float('inf')
-        self.load_best_score()
+        self.best_score, self.best_time = get_best_score()
         
         # Start background music
         self.start_background_music()
@@ -858,7 +1151,7 @@ class Game:
         # Add a mouse to a random empty cell if there are fewer than 3 mice
         if len(self.mice) < 3:
             empty_cells = [(x, y) for x in range(GRID_SIZE) for y in range(GRID_SIZE) 
-                          if (x, y) not in self.mice and (x, y) != self.kitty_pos]
+                          if (x, y) not in self.mice and (x, y) not in self.bones and (x, y) != self.kitty_pos]
             if empty_cells:
                 pos = random.choice(empty_cells)
                 self.mice.append(pos)
@@ -1387,14 +1680,25 @@ class Game:
             pass  # No history file yet
     
     def save_game_history(self):
-        # Save game history to file
-        with open("game_history.txt", "a") as file:
-            date_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            minutes = int(self.elapsed_time) // 60
-            seconds = int(self.elapsed_time) % 60
-            time_str = f"{minutes}:{seconds:02d}"
-            file.write(f"{date_time}, Score: {self.fruits_collected}, Moves: {self.moves}, Time: {time_str}, Stars: {self.stars_earned}\n")
-            
+        # Load existing history
+        history = load_game_history()
+        
+        # Create new game record
+        game_record = {
+            "timestamp": time.time(),
+            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "score": self.fruits_collected,
+            "moves": self.moves,
+            "time": self.elapsed_time,
+            "stars": self.stars_earned
+        }
+        
+        # Add to history
+        history.append(game_record)
+        
+        # Save updated history
+        save_game_history(history)
+        
         # Update best score and time
         if self.fruits_collected > self.best_score:
             self.best_score = self.fruits_collected
