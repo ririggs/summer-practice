@@ -16,8 +16,7 @@ GRID_SIZE = 7
 CELL_SIZE = 80
 MARGIN = 10
 SCREEN_WIDTH = GRID_SIZE * CELL_SIZE + (GRID_SIZE + 1) * MARGIN
-SCREEN_HEIGHT = GRID_SIZE * CELL_SIZE + \
-    (GRID_SIZE + 1) * MARGIN + 100  # Extra space for UI
+SCREEN_HEIGHT = GRID_SIZE * CELL_SIZE + (GRID_SIZE + 1) * MARGIN + 100  # Extra space for UI
 
 # Colors
 WHITE = (255, 255, 255)
@@ -37,14 +36,14 @@ MAX_MOVES = 10
 FOOD_GOAL = 75
 FOOD_ITEMS_PER_GAME = 3  # Number of food types to use in each game
 SETTINGS_FILE = "game_settings.json"  # File to store settings
-HISTORY_FILE = "game_history.json"   # File to store game history
+HISTORY_FILE = "game_history.json"  # File to store game history
 
 # Star rating thresholds
 STAR_THRESHOLDS = [
-    (0, 0),     # 0 stars: 0-74 points
-    (75, 1),    # 1 star: 75-95 points
-    (96, 2),    # 2 stars: 96-125 points
-    (126, 3)    # 3 stars: 126+ points
+    (0, 0),  # 0 stars: 0-74 points
+    (75, 1),  # 1 star: 75-95 points
+    (96, 2),  # 2 stars: 96-125 points
+    (126, 3)  # 3 stars: 126+ points
 ]
 
 # Default game settings
@@ -52,12 +51,12 @@ DEFAULT_SETTINGS = {
     "sound_volume": 50,
     "music_volume": 50,
     "collect_key": pygame.K_SPACE,
-    "reload_key": pygame.K_r
+    "reload_key": pygame.K_r,
+    "graphics_mode": "food"
 }
 
+
 # Load settings from file or use defaults
-
-
 def load_settings():
     try:
         with open(SETTINGS_FILE, "r") as file:
@@ -80,9 +79,8 @@ def load_settings():
         save_settings(DEFAULT_SETTINGS)
         return DEFAULT_SETTINGS.copy()
 
+
 # Save settings to file
-
-
 def save_settings(settings):
     try:
         with open(SETTINGS_FILE, "w") as file:
@@ -106,9 +104,8 @@ def load_game_history():
         print(f"Error loading game history: {e}. Creating new history.")
         return []
 
+
 # Save game history to file
-
-
 def save_game_history(history):
     try:
         with open(HISTORY_FILE, "w") as file:
@@ -117,9 +114,8 @@ def save_game_history(history):
     except Exception as e:
         print(f"Error saving game history: {e}")
 
+
 # Get best score from history
-
-
 def get_best_score():
     history = load_game_history()
     if not history:
@@ -129,8 +125,7 @@ def get_best_score():
 
     # Find best time for winning games
     winning_games = [game for game in history if game["score"] >= FOOD_GOAL]
-    best_time = min([game["time"] for game in winning_games]
-                    ) if winning_games else float('inf')
+    best_time = min([game["time"] for game in winning_games]) if winning_games else float('inf')
 
     return best_score, best_time
 
@@ -138,27 +133,35 @@ def get_best_score():
 # Game settings (load from file or use defaults)
 SETTINGS = load_settings()
 
+
 # Game instructions in English
-INSTRUCTIONS = [
-    "How to play:",
-    "",
-    "1. Connect the same types of food to make the cat eat them.",
-    "2. Mice give 5 points each.",
-    "3. Bones take away 10 points each.",
-    "4. Collect 75 points to win.",
-    "5. You have only 10 moves.",
-    "6. You can reload the field once per game.",
-    "",
-    "Control:",
-    "- Click on the food to select it.",
-    "- Press the 'Collect' button or Space key to collect the food.",
-    "- Press the 'Reload' button or R key to refresh the field.",
-    "- Press ESC to return to the menu."
-]
+def get_instructions(is_fruits_mode=False):
+    penalty_item = "Rocks" if is_fruits_mode else "Bones"
+    food_type = "fruits" if is_fruits_mode else "food"
+
+    return [
+        "How to play:",
+        "",
+        f"1. Connect the same types of {food_type} to make the cat eat them.",
+        "2. Mice give 5 points each.",
+        f"3. {penalty_item} take away 10 points each.",
+        "4. Collect 75 points to win.",
+        "5. You have only 10 moves.",
+        "6. You can reload the field once per game.",
+        "",
+        "Control:",
+        "- Click on the food to select it.",
+        "- Press the 'Collect' button or Space key to collect the food.",
+        "- Press the 'Reload' button or R key to refresh the field.",
+        "- Press ESC to return to the menu."
+    ]
+
+
+# Original INSTRUCTIONS variable (kept for backward compatibility)
+INSTRUCTIONS = get_instructions(False)
+
 
 # Load images
-
-
 def load_image(filename, subdirectory=None):
     if subdirectory:
         path = os.path.join('assets', subdirectory, filename)
@@ -174,24 +177,26 @@ def load_image(filename, subdirectory=None):
         surface.fill((255, 0, 0))
         return surface
 
-# Load all available food images from assets/food directory
 
-
+# Load all available food images from assets/food or assets/fruits directory based on settings
 def load_all_foods():
     all_foods = {}
     try:
-        food_dir = os.path.join('assets', 'food')
+        # Use either food or fruits directory based on settings
+        graphics_dir = 'fruits' if SETTINGS.get("graphics_mode") == "fruits" else 'food'
+        food_dir = os.path.join('assets', graphics_dir)
+
         # Create the directory if it doesn't exist
         if not os.path.exists(food_dir):
-            print("Food directory not found. Creating it.")
+            print(f"{graphics_dir} directory not found. Creating it.")
             os.makedirs(food_dir, exist_ok=True)
 
         for filename in os.listdir(food_dir):
             if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
                 food_name = os.path.splitext(filename)[0]  # Remove extension
-                all_foods[food_name] = load_image(filename, 'food')
+                all_foods[food_name] = load_image(filename, graphics_dir)
     except (FileNotFoundError, PermissionError) as e:
-        print(f"Error accessing food directory: {e}")
+        print(f"Error accessing {graphics_dir} directory: {e}")
         # Fallback to default foods
         all_foods = {
             'ball': load_image('ball.png'),
@@ -201,14 +206,13 @@ def load_all_foods():
 
     # Ensure we have at least 3 foods
     if len(all_foods) < FOOD_ITEMS_PER_GAME:
-        print(
-            f"Not enough food images found. Need at least {FOOD_ITEMS_PER_GAME}.")
+        print(f"Not enough food images found. Need at least {FOOD_ITEMS_PER_GAME}.")
         # Create some colored squares as fallback
         colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
         for i in range(FOOD_ITEMS_PER_GAME - len(all_foods)):
             surface = pygame.Surface((CELL_SIZE - 10, CELL_SIZE - 10))
             surface.fill(colors[i % len(colors)])
-            all_foods[f'food{i+1}'] = surface
+            all_foods[f'food{i + 1}'] = surface
 
     return all_foods
 
@@ -220,11 +224,15 @@ ALL_FOOD_IMAGES = load_all_foods()
 MOUSE_IMAGE = load_image('mouse.png')
 KITTY_IMAGE = load_image('kitty.png')
 ARROW_IMAGE = load_image('arrow_right.png')
-BONES_IMAGE = load_image('bones.png')  # Load bones image
+
+# Load penalty item image based on graphics mode
+if SETTINGS.get("graphics_mode") == "fruits":
+    PENALTY_IMAGE = load_image('rock.png')  # Use rock for fruits mode
+else:
+    PENALTY_IMAGE = load_image('bones.png')  # Use bones for food mode
+
 
 # Load sound effects
-
-
 def load_sound(filename):
     path = os.path.join('assets', 'sounds', filename)
     try:
@@ -243,9 +251,8 @@ PURR_SOUND = load_sound('cat_purr.mp3')
 BONE_SOUND = load_sound('bone_sound.mp3')
 MOUSE_SOUND = load_sound('mouse_sound.mp3')
 
+
 # Apply sound settings from the SETTINGS dictionary
-
-
 def apply_sound_settings():
     # Apply sound volume to all sound effects
     volume = SETTINGS["sound_volume"] / 100
@@ -269,9 +276,8 @@ def apply_sound_settings():
 # Apply sound settings at startup
 apply_sound_settings()
 
+
 # Create star images
-
-
 def create_star_image(filled=True, size=50):
     surface = pygame.Surface((size, size), pygame.SRCALPHA)
     if filled:
@@ -284,12 +290,10 @@ def create_star_image(filled=True, size=50):
     for i in range(5):
         # Outer point
         angle = math.pi * 2 * i / 5 - math.pi / 2
-        points.append((size/2 + size/2 * math.cos(angle),
-                      size/2 + size/2 * math.sin(angle)))
+        points.append((size / 2 + size / 2 * math.cos(angle), size / 2 + size / 2 * math.sin(angle)))
         # Inner point
         angle += math.pi / 5
-        points.append((size/2 + size/4 * math.cos(angle),
-                      size/2 + size/4 * math.sin(angle)))
+        points.append((size / 2 + size / 4 * math.cos(angle), size / 2 + size / 4 * math.sin(angle)))
 
     pygame.draw.polygon(surface, color, points)
     return surface
@@ -299,18 +303,16 @@ def create_star_image(filled=True, size=50):
 EMPTY_STAR = create_star_image(filled=False)
 FILLED_STAR = create_star_image(filled=True)
 
+
 # Calculate angle between two points
-
-
 def calculate_angle(start_pos, end_pos):
     dx = end_pos[1] - start_pos[1]  # Column difference (x)
     dy = end_pos[0] - start_pos[0]  # Row difference (y)
     angle = math.degrees(math.atan2(dy, dx))
     return angle
 
+
 # Button class for menu
-
-
 class Button:
     def __init__(self, x, y, width, height, text, font, normal_color=BLUE, hover_color=LIGHT_BLUE):
         self.rect = pygame.Rect(x, y, width, height)
@@ -343,6 +345,67 @@ class Button:
         return False
 
 
+# Toggle Switch control for settings
+class ToggleSwitch:
+    def __init__(self, x, y, width, height, label, font, options, initial_option):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.label = label
+        self.font = font
+        self.options = options  # List of options: ["option1", "option2"]
+        self.current_option = initial_option if initial_option in options else options[0]
+        self.is_hovered = False
+
+        # Calculate button positions
+        self.button_width = width // len(options)
+        self.buttons = []
+        for i, option in enumerate(options):
+            button_x = x + i * self.button_width
+            button_rect = pygame.Rect(button_x, y, self.button_width, height)
+            self.buttons.append((button_rect, option))
+
+    def draw(self, screen):
+        # Draw label
+        label_text = self.font.render(f"{self.label}:", True, BLACK)
+        label_rect = label_text.get_rect(bottomleft=(self.rect.x, self.rect.y - 10))
+        screen.blit(label_text, label_rect)
+
+        # Draw toggle buttons
+        for button_rect, option in self.buttons:
+            # Determine if this button is selected
+            is_selected = option == self.current_option
+
+            # Choose color based on selection and hover
+            if is_selected:
+                color = DARK_BLUE
+                text_color = WHITE
+            else:
+                color = GRAY
+                text_color = BLACK
+
+            # Draw button
+            pygame.draw.rect(screen, color, button_rect, border_radius=5)
+            pygame.draw.rect(screen, BLACK, button_rect, 2, border_radius=5)
+
+            # Draw option text
+            option_text = self.font.render(option, True, text_color)
+            text_rect = option_text.get_rect(center=button_rect.center)
+            screen.blit(option_text, text_rect)
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for button_rect, option in self.buttons:
+                if button_rect.collidepoint(event.pos):
+                    if self.current_option != option:
+                        self.current_option = option
+                        return True
+        return False
+
+    def check_hover(self, pos):
+        was_hovered = self.is_hovered
+        self.is_hovered = self.rect.collidepoint(pos)
+        return was_hovered != self.is_hovered
+
+
 class CircleButton:
     def __init__(self, x, y, radius, text, font, normal_color=BLUE, hover_color=LIGHT_BLUE, hover_text=""):
         self.x = x
@@ -359,8 +422,7 @@ class CircleButton:
         self.hover_text_surf = None
         if hover_text:
             small_font = pygame.font.SysFont("Arial", 18)
-            self.hover_text_surf = small_font.render(
-                hover_text, True, BLACK, WHITE)
+            self.hover_text_surf = small_font.render(hover_text, True, BLACK, WHITE)
 
     def draw(self, screen):
         # Draw circular button with hover effect
@@ -401,14 +463,12 @@ class CircleButton:
     def is_clicked(self, pos, event):
         # Check if button was clicked
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            distance = math.sqrt((pos[0] - self.x) **
-                                 2 + (pos[1] - self.y) ** 2)
+            distance = math.sqrt((pos[0] - self.x) ** 2 + (pos[1] - self.y) ** 2)
             return distance <= self.radius
         return False
 
+
 # Slider control for settings
-
-
 class Slider:
     def __init__(self, x, y, width, height, min_val, max_val, step, initial_val, label, font):
         self.rect = pygame.Rect(x, y, width, height)
@@ -429,10 +489,8 @@ class Slider:
         # Calculate handle position based on current value
         value_range = self.max_val - self.min_val
         position_ratio = (self.value - self.min_val) / value_range
-        handle_x = self.rect.x + \
-            int(position_ratio * self.rect.width) - self.handle_width // 2
-        self.handle_rect = pygame.Rect(
-            handle_x, self.rect.y - 5, self.handle_width, self.handle_height)
+        handle_x = self.rect.x + int(position_ratio * self.rect.width) - self.handle_width // 2
+        self.handle_rect = pygame.Rect(handle_x, self.rect.y - 5, self.handle_width, self.handle_height)
 
     def draw(self, screen):
         # Draw slider track
@@ -443,10 +501,8 @@ class Slider:
         pygame.draw.rect(screen, BLACK, self.handle_rect, 2, border_radius=5)
 
         # Draw label and value
-        label_text = self.font.render(
-            f"{self.label}: {self.value}", True, BLACK)
-        label_rect = label_text.get_rect(
-            bottomleft=(self.rect.x, self.rect.y - 10))
+        label_text = self.font.render(f"{self.label}: {self.value}", True, BLACK)
+        label_rect = label_text.get_rect(bottomleft=(self.rect.x, self.rect.y - 10))
         screen.blit(label_text, label_rect)
 
         # Draw tick marks
@@ -467,11 +523,9 @@ class Slider:
 
         elif event.type == pygame.MOUSEMOTION and self.is_dragging:
             # Calculate new value based on mouse position
-            x_pos = max(self.rect.x, min(
-                event.pos[0], self.rect.x + self.rect.width))
+            x_pos = max(self.rect.x, min(event.pos[0], self.rect.x + self.rect.width))
             position_ratio = (x_pos - self.rect.x) / self.rect.width
-            new_value = self.min_val + position_ratio * \
-                (self.max_val - self.min_val)
+            new_value = self.min_val + position_ratio * (self.max_val - self.min_val)
 
             # Round to nearest step
             self.value = round(new_value / self.step) * self.step
@@ -483,9 +537,8 @@ class Slider:
 
         return False
 
+
 # Key binding control for settings
-
-
 class KeyBindControl:
     def __init__(self, x, y, width, height, label, font, initial_key):
         self.rect = pygame.Rect(x, y, width, height)
@@ -503,8 +556,7 @@ class KeyBindControl:
 
         # Draw label
         label_text = self.font.render(f"{self.label}:", True, BLACK)
-        label_rect = label_text.get_rect(
-            bottomleft=(self.rect.x, self.rect.y - 10))
+        label_rect = label_text.get_rect(bottomleft=(self.rect.x, self.rect.y - 10))
         screen.blit(label_text, label_rect)
 
         # Draw current key
@@ -516,8 +568,7 @@ class KeyBindControl:
         if self.is_listening:
             instruction_text = self.font.render("Press any key...", True, RED)
             # Position the instruction 20px above the Back button
-            instruction_rect = instruction_text.get_rect(
-                center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 80))
+            instruction_rect = instruction_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 80))
             screen.blit(instruction_text, instruction_rect)
 
     def handle_event(self, event):
@@ -538,8 +589,9 @@ class KeyBindControl:
 
 
 class Settings:
-    def __init__(self, screen):
+    def __init__(self, screen, main_menu=None):
         self.screen = screen
+        self.main_menu = main_menu  # Reference to the main menu for updating
         self.running = True
         self.font = pygame.font.SysFont("Arial", 24)
         self.title_font = pygame.font.SysFont("Arial", 36)
@@ -548,7 +600,7 @@ class Settings:
         slider_width = 300
         slider_height = 20
         control_spacing = 80
-        start_y = SCREEN_HEIGHT // 3 - 40  # Move up to make room for additional control
+        start_y = SCREEN_HEIGHT // 3 - 80  # Move up to make room for additional control
 
         self.sound_slider = Slider(
             SCREEN_WIDTH // 2 - slider_width // 2,
@@ -572,9 +624,21 @@ class Settings:
             self.font
         )
 
-        self.collect_key_control = KeyBindControl(
+        # Add graphics mode toggle
+        self.graphics_toggle = ToggleSwitch(
             SCREEN_WIDTH // 2 - slider_width // 2,
             start_y + 2 * control_spacing,
+            slider_width,
+            40,
+            "Graphics Mode",
+            self.font,
+            ["Cat Food", "Fruits"],
+            "Cat Food" if SETTINGS["graphics_mode"] == "food" else "Fruits"
+        )
+
+        self.collect_key_control = KeyBindControl(
+            SCREEN_WIDTH // 2 - slider_width // 2,
+            start_y + 3 * control_spacing,
             slider_width,
             40,
             "Collect Key",
@@ -584,7 +648,7 @@ class Settings:
 
         self.reload_key_control = KeyBindControl(
             SCREEN_WIDTH // 2 - slider_width // 2,
-            start_y + 3 * control_spacing,
+            start_y + 4 * control_spacing,
             slider_width,
             40,
             "Reload Field Key",
@@ -610,6 +674,7 @@ class Settings:
 
             # Check for hover state changes
             hover_changed = self.back_button.check_hover(mouse_pos)
+            hover_changed |= self.graphics_toggle.check_hover(mouse_pos)
 
             # Play sound on hover change
             if hover_changed and TAP_SOUND:
@@ -630,6 +695,7 @@ class Settings:
                 # Handle slider and key bind events
                 sound_changed = self.sound_slider.handle_event(event)
                 music_changed = self.music_slider.handle_event(event)
+                graphics_changed = self.graphics_toggle.handle_event(event)
                 self.collect_key_control.handle_event(event)
                 self.reload_key_control.handle_event(event)
 
@@ -651,13 +717,13 @@ class Settings:
 
             # Draw title
             title_text = self.title_font.render("Settings", True, DARK_BLUE)
-            title_rect = title_text.get_rect(
-                center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 6))
+            title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 6))
             self.screen.blit(title_text, title_rect)
 
             # Draw controls
             self.sound_slider.draw(self.screen)
             self.music_slider.draw(self.screen)
+            self.graphics_toggle.draw(self.screen)
             self.collect_key_control.draw(self.screen)
             self.reload_key_control.draw(self.screen)
             self.back_button.draw(self.screen)
@@ -685,9 +751,22 @@ class Settings:
         SETTINGS["music_volume"] = self.music_slider.value
         SETTINGS["collect_key"] = self.collect_key_control.key
         SETTINGS["reload_key"] = self.reload_key_control.key
+        # Save graphics mode
+        SETTINGS["graphics_mode"] = "food" if self.graphics_toggle.current_option == "Cat Food" else "fruits"
 
         # Apply sound settings
         apply_sound_settings()
+
+        # Update main menu's graphics mode if available
+        if self.main_menu:
+            self.main_menu.is_fruits_mode = SETTINGS["graphics_mode"] == "fruits"
+
+            # Also reload the penalty image based on the new setting
+            global PENALTY_IMAGE
+            if SETTINGS["graphics_mode"] == "fruits":
+                PENALTY_IMAGE = load_image('rock.png')  # Use rock for fruits mode
+            else:
+                PENALTY_IMAGE = load_image('bones.png')  # Use bones for food mode
 
         # Save to file
         save_settings(SETTINGS)
@@ -747,8 +826,7 @@ class Records:
             self.screen.fill(WHITE)
 
             # Draw title
-            title_text = self.title_font.render(
-                "Game Records", True, DARK_BLUE)
+            title_text = self.title_font.render("Game Records", True, DARK_BLUE)
             title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 40))
             self.screen.blit(title_text, title_rect)
 
@@ -773,10 +851,8 @@ class Records:
 
         # Draw table background
         table_height = 6 * row_height  # Header + 5 rows
-        pygame.draw.rect(self.screen, LIGHT_BLUE, (table_x,
-                         table_y, table_width, table_height), border_radius=5)
-        pygame.draw.rect(self.screen, BLACK, (table_x, table_y,
-                         table_width, table_height), 2, border_radius=5)
+        pygame.draw.rect(self.screen, LIGHT_BLUE, (table_x, table_y, table_width, table_height), border_radius=5)
+        pygame.draw.rect(self.screen, BLACK, (table_x, table_y, table_width, table_height), 2, border_radius=5)
 
         # Draw header with proper alignment
         header_y = table_y + 20  # Moved 25px lower
@@ -784,14 +860,13 @@ class Records:
         col_widths = [0.1, 0.4, 0.2, 0.15, 0.15]  # Proportions of table width
 
         # Draw header background
-        pygame.draw.rect(self.screen, DARK_BLUE, (table_x,
-                         table_y, table_width, row_height), border_radius=5)
+        pygame.draw.rect(self.screen, DARK_BLUE, (table_x, table_y, table_width, row_height), border_radius=5)
 
         for i, header in enumerate(headers):
             col_x = table_x + sum(col_widths[:i]) * table_width + 5
             col_width = col_widths[i] * table_width
             text = self.font.render(header, True, WHITE)
-            text_rect = text.get_rect(center=(col_x + col_width/2, header_y))
+            text_rect = text.get_rect(center=(col_x + col_width / 2, header_y))
             self.screen.blit(text, text_rect)
 
         # Draw separator line
@@ -799,8 +874,7 @@ class Records:
                          (table_x + table_width, table_y + row_height), 2)
 
         # Sort history by score (descending)
-        sorted_history = sorted(
-            self.history, key=lambda x: x["score"], reverse=True)
+        sorted_history = sorted(self.history, key=lambda x: x["score"], reverse=True)
 
         # Draw top 5 records
         for i in range(min(5, len(sorted_history))):
@@ -808,25 +882,21 @@ class Records:
             row_y = table_y + (i + 1) * row_height + 25  # Moved 15px lower
 
             # Rank
-            text = self.font.render(f"{i+1}", True, BLACK)
+            text = self.font.render(f"{i + 1}", True, BLACK)
             col_x = table_x + col_widths[0] * table_width / 2
             text_rect = text.get_rect(center=(col_x, row_y))
             self.screen.blit(text, text_rect)
 
             # Date
-            date_str = datetime.fromtimestamp(
-                record["timestamp"]).strftime("%Y-%m-%d %H:%M")
+            date_str = datetime.fromtimestamp(record["timestamp"]).strftime("%Y-%m-%d %H:%M")
             text = self.small_font.render(date_str, True, BLACK)
-            col_x = table_x + col_widths[0] * \
-                table_width + col_widths[1] * table_width / 2
+            col_x = table_x + col_widths[0] * table_width + col_widths[1] * table_width / 2
             text_rect = text.get_rect(center=(col_x, row_y))
             self.screen.blit(text, text_rect)
 
             # Score
             text = self.font.render(f"{record['score']}", True, BLACK)
-            col_x = table_x + \
-                sum(col_widths[:2]) * table_width + \
-                col_widths[2] * table_width / 2
+            col_x = table_x + sum(col_widths[:2]) * table_width + col_widths[2] * table_width / 2
             text_rect = text.get_rect(center=(col_x, row_y))
             self.screen.blit(text, text_rect)
 
@@ -834,16 +904,12 @@ class Records:
             minutes = int(record["time"]) // 60
             seconds = int(record["time"]) % 60
             text = self.font.render(f"{minutes}:{seconds:02d}", True, BLACK)
-            col_x = table_x + \
-                sum(col_widths[:3]) * table_width + \
-                col_widths[3] * table_width / 2
+            col_x = table_x + sum(col_widths[:3]) * table_width + col_widths[3] * table_width / 2
             text_rect = text.get_rect(center=(col_x, row_y))
             self.screen.blit(text, text_rect)
 
             # Stars
-            stars_x = table_x + \
-                sum(col_widths[:4]) * table_width + \
-                col_widths[4] * table_width / 2
+            stars_x = table_x + sum(col_widths[:4]) * table_width + col_widths[4] * table_width / 2
             self.draw_stars(stars_x, row_y, record["stars"])
 
     def draw_stars(self, x, y, stars_count):
@@ -854,9 +920,8 @@ class Records:
 
         for i in range(stars_count):
             star_x = start_x + i * (star_size + spacing)
-            star_rect = FILLED_STAR.get_rect(topleft=(star_x, y - star_size/2))
-            star_image = pygame.transform.scale(
-                FILLED_STAR, (star_size, star_size))
+            star_rect = FILLED_STAR.get_rect(topleft=(star_x, y - star_size / 2))
+            star_image = pygame.transform.scale(FILLED_STAR, (star_size, star_size))
             self.screen.blit(star_image, star_rect)
 
     def draw_bar_chart(self):
@@ -867,26 +932,20 @@ class Records:
         chart_y = 385  # Moved 50px lower (from 350)
 
         # Draw chart title above the chart
-        title_text = self.font.render(
-            "Score History (Last 10 Games)", True, DARK_BLUE)
-        title_rect = title_text.get_rect(
-            midtop=(chart_x + chart_width/2, chart_y - 30))
+        title_text = self.font.render("Score History (Last 10 Games)", True, DARK_BLUE)
+        title_rect = title_text.get_rect(midtop=(chart_x + chart_width / 2, chart_y - 30))
         self.screen.blit(title_text, title_rect)
 
         # Draw chart background
-        pygame.draw.rect(self.screen, GRAY, (chart_x, chart_y,
-                         chart_width, chart_height), border_radius=5)
-        pygame.draw.rect(self.screen, BLACK, (chart_x, chart_y,
-                         chart_width, chart_height), 2, border_radius=5)
+        pygame.draw.rect(self.screen, GRAY, (chart_x, chart_y, chart_width, chart_height), border_radius=5)
+        pygame.draw.rect(self.screen, BLACK, (chart_x, chart_y, chart_width, chart_height), 2, border_radius=5)
 
         # Get last 10 games
         recent_games = sorted(self.history, key=lambda x: x["timestamp"])[-10:]
         if not recent_games:
             # Draw "No data" message
-            no_data_text = self.font.render(
-                "No game history data available", True, BLACK)
-            no_data_rect = no_data_text.get_rect(
-                center=(chart_x + chart_width/2, chart_y + chart_height/2))
+            no_data_text = self.font.render("No game history data available", True, BLACK)
+            no_data_rect = no_data_text.get_rect(center=(chart_x + chart_width / 2, chart_y + chart_height / 2))
             self.screen.blit(no_data_text, no_data_rect)
             return
 
@@ -908,8 +967,7 @@ class Records:
         for i in range(grid_steps + 1):
             # Calculate score value and y position
             score_value = int((i / grid_steps) * max_score)
-            y_pos = chart_y + chart_height - 30 - \
-                (i * (chart_height - 50) / grid_steps)
+            y_pos = chart_y + chart_height - 30 - (i * (chart_height - 50) / grid_steps)
 
             # Draw grid line
             pygame.draw.line(self.screen, grid_color,
@@ -918,23 +976,20 @@ class Records:
 
             # Draw y-axis label
             score_label = self.small_font.render(str(score_value), True, BLACK)
-            label_rect = score_label.get_rect(
-                midright=(chart_x + y_axis_padding, y_pos))
+            label_rect = score_label.get_rect(midright=(chart_x + y_axis_padding, y_pos))
             self.screen.blit(score_label, label_rect)
 
         # Calculate positions for dots
         dot_radius = 6
         dot_positions = []
-        point_spacing = (chart_inner_width - 20) / \
-            (len(recent_games) - 1) if len(recent_games) > 1 else 0
+        point_spacing = (chart_inner_width - 20) / (len(recent_games) - 1) if len(recent_games) > 1 else 0
         bar_bottom = chart_y + chart_height - 30
 
         for i, game in enumerate(recent_games):
             # Calculate dot position
             score = game["score"]
-            x_pos = chart_x + y_axis_padding + 10 + \
-                (i * point_spacing) if len(recent_games) > 1 else chart_x + \
-                chart_width / 2
+            x_pos = chart_x + y_axis_padding + 10 + (i * point_spacing) if len(
+                recent_games) > 1 else chart_x + chart_width / 2
             y_pos = bar_bottom - (score / max_score) * (chart_height - 50)
 
             dot_positions.append((x_pos, y_pos, score))
@@ -946,17 +1001,14 @@ class Records:
             for i in range(len(dot_positions) - 1):
                 start_x, start_y, _ = dot_positions[i]
                 end_x, end_y, _ = dot_positions[i + 1]
-                pygame.draw.line(self.screen, BLUE,
-                                 (start_x, start_y), (end_x, end_y), 2)
+                pygame.draw.line(self.screen, BLUE, (start_x, start_y), (end_x, end_y), 2)
 
         # Draw dots and score labels
         for x_pos, y_pos, score in dot_positions:
             # Draw dot with color based on whether goal was reached
             dot_color = GREEN if score >= FOOD_GOAL else BLUE
-            pygame.draw.circle(self.screen, dot_color,
-                               (int(x_pos), int(y_pos)), dot_radius)
-            pygame.draw.circle(self.screen, BLACK, (int(
-                x_pos), int(y_pos)), dot_radius, 1)  # Outline
+            pygame.draw.circle(self.screen, dot_color, (int(x_pos), int(y_pos)), dot_radius)
+            pygame.draw.circle(self.screen, BLACK, (int(x_pos), int(y_pos)), dot_radius, 1)  # Outline
 
             # Draw score above dot
             score_text = self.small_font.render(str(score), True, BLACK)
@@ -972,13 +1024,11 @@ class Records:
 
         # Draw goal line
         goal_y = bar_bottom - (FOOD_GOAL / max_score) * (chart_height - 50)
-        pygame.draw.line(self.screen, RED, (chart_x + y_axis_padding,
-                         goal_y), (chart_x + chart_width - 10, goal_y), 2)
+        pygame.draw.line(self.screen, RED, (chart_x + y_axis_padding, goal_y), (chart_x + chart_width - 10, goal_y), 2)
 
         # Draw goal label
         goal_text = self.small_font.render(f"Goal: {FOOD_GOAL}", True, RED)
-        goal_rect = goal_text.get_rect(
-            midright=(chart_x + chart_width - 15, goal_y - 5))
+        goal_rect = goal_text.get_rect(midright=(chart_x + chart_width - 15, goal_y - 5))
 
         # Add background to goal label for better visibility
         padding = 2
@@ -996,6 +1046,9 @@ class MainMenu:
         self.font = pygame.font.SysFont("Arial", 36)
         self.title_font = pygame.font.SysFont("Arial", 64)
         self.small_font = pygame.font.SysFont("Arial", 18)
+
+        # Get current graphics mode
+        self.is_fruits_mode = SETTINGS.get("graphics_mode") == "fruits"
 
         # Create buttons
         button_width = 300
@@ -1056,8 +1109,7 @@ class MainMenu:
 
     def draw_instructions(self):
         # Draw semi-transparent overlay
-        overlay = pygame.Surface(
-            (SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 180))  # Semi-transparent black
         self.screen.blit(overlay, (0, 0))
 
@@ -1070,29 +1122,27 @@ class MainMenu:
         panel_y = (SCREEN_HEIGHT - panel_height) // 2
 
         # Draw panel background
-        pygame.draw.rect(self.screen, WHITE, (panel_x, panel_y,
-                         panel_width, panel_height), border_radius=10)
-        pygame.draw.rect(self.screen, BLACK, (panel_x, panel_y,
-                         panel_width, panel_height), 2, border_radius=10)
+        pygame.draw.rect(self.screen, WHITE, (panel_x, panel_y, panel_width, panel_height), border_radius=10)
+        pygame.draw.rect(self.screen, BLACK, (panel_x, panel_y, panel_width, panel_height), 2, border_radius=10)
 
         # Draw instructions title
         title_text = self.font.render("Instructions", True, DARK_BLUE)
-        title_rect = title_text.get_rect(
-            midtop=(panel_x + panel_width // 2, panel_y + 25))
+        title_rect = title_text.get_rect(midtop=(panel_x + panel_width // 2, panel_y + 25))
         self.screen.blit(title_text, title_rect)
+
+        # Get dynamic instructions based on current graphics mode
+        instructions = get_instructions(self.is_fruits_mode)
 
         # Draw instructions text
         line_height = 26  # Slightly increased line height for better readability
-        for i, line in enumerate(INSTRUCTIONS):
+        for i, line in enumerate(instructions):
             text = self.small_font.render(line, True, BLACK)
-            rect = text.get_rect(
-                topleft=(panel_x + 40, panel_y + 80 + i * line_height))
+            rect = text.get_rect(topleft=(panel_x + 40, panel_y + 80 + i * line_height))
             self.screen.blit(text, rect)
 
         # Draw close button
         close_text = self.small_font.render("Close (ESC or click)", True, BLUE)
-        close_rect = close_text.get_rect(midbottom=(
-            panel_x + panel_width // 2, panel_y + panel_height - 25))
+        close_rect = close_text.get_rect(midbottom=(panel_x + panel_width // 2, panel_y + panel_height - 25))
         self.screen.blit(close_text, close_rect)
 
     def run(self):
@@ -1147,8 +1197,8 @@ class MainMenu:
                         records_screen.run()
 
                     elif self.settings_button.is_clicked(mouse_pos, event):
-                        # Open settings screen
-                        settings_screen = Settings(self.screen)
+                        # Open settings screen - pass self reference for hot reload
+                        settings_screen = Settings(self.screen, self)
                         settings_screen.run()
 
                     elif self.help_button.is_clicked(mouse_pos, event):
@@ -1170,10 +1220,8 @@ class MainMenu:
             self.screen.fill(WHITE)
 
             # Draw title
-            title_text = self.title_font.render(
-                "Kitty Food Game", True, DARK_BLUE)
-            title_rect = title_text.get_rect(
-                center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 4))
+            title_text = self.title_font.render("Kitty Food Game", True, DARK_BLUE)
+            title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 4))
             self.screen.blit(title_text, title_rect)
 
             # Draw buttons if not showing instructions
@@ -1200,6 +1248,14 @@ class Game:
         self.font = pygame.font.SysFont("Arial", 24)
         self.small_font = pygame.font.SysFont("Arial", 18)
         self.large_font = pygame.font.SysFont("Arial", 36)
+
+        # Reload food images based on current settings
+        global ALL_FOOD_IMAGES
+        ALL_FOOD_IMAGES = load_all_foods()
+
+        # Set appropriate terminology based on graphics mode
+        self.is_fruits_mode = SETTINGS.get("graphics_mode") == "fruits"
+        self.penalty_name = "rocks" if self.is_fruits_mode else "bones"
 
         # Create collect button
         self.collect_button_rect = pygame.Rect(
@@ -1240,8 +1296,7 @@ class Game:
         self.select_game_foods()
 
         # Initialize game state
-        self.board = [[random.choice(self.foods) for _ in range(
-            GRID_SIZE)] for _ in range(GRID_SIZE)]
+        self.board = [[random.choice(self.foods) for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
         self.mice = []  # List to store mouse positions [(x, y), ...]
         self.bones = []  # List to store bone positions [(x, y), ...]
         self.selected_cells = []  # List to store selected cells
@@ -1255,8 +1310,7 @@ class Game:
         self.elapsed_time = 0
         self.stars_earned = 0
         self.show_results = False
-        # Flag to track if we should add a mouse after animation
-        self.should_add_mouse = False
+        self.should_add_mouse = False  # Flag to track if we should add a mouse after animation
         self.should_add_bones = False  # Flag to track if we should add bones after animation
         self.chain_result_preview = 0  # Preview of the chain result
         self.reload_count = 1  # Number of field reloads available
@@ -1297,8 +1351,7 @@ class Game:
         self.points_popup_time = 0
 
         # Place kitty in the middle of the board
-        self.kitty_pos = (GRID_SIZE // 2, GRID_SIZE //
-                          2)  # (3,3) for a 7x7 grid
+        self.kitty_pos = (GRID_SIZE // 2, GRID_SIZE // 2)  # (3,3) for a 7x7 grid
 
         # Remove food from kitty's position
         kitty_row, kitty_col = self.kitty_pos
@@ -1355,10 +1408,8 @@ class Game:
         # Count regular food cells (not mice or bones)
         regular_food_cells = sum(1 for cell in self.selected_cells
                                  if cell not in self.mice and cell not in self.bones)
-        mice_caught = sum(
-            1 for mouse in self.mice if mouse in self.selected_cells)
-        bones_caught = sum(
-            1 for bone in self.bones if bone in self.selected_cells)
+        mice_caught = sum(1 for mouse in self.mice if mouse in self.selected_cells)
+        bones_caught = sum(1 for bone in self.bones if bone in self.selected_cells)
 
         food_points = regular_food_cells
         mouse_points = mice_caught * 4
@@ -1384,15 +1435,15 @@ class Game:
         if abs(row - last_row) <= 1 and abs(col - last_col) <= 1:
             # Check if it's a mouse or bone (can always be selected)
             if (row, col) in self.mice or (row, col) in self.bones:
-                # Just make sure we haven't selected it already
-                return (row, col) not in self.selected_cells
+                return (row, col) not in self.selected_cells  # Just make sure we haven't selected it already
 
             # If not a mouse or bone, check if it's the same food type as the first selection
             if (row, col) not in self.selected_cells:  # Make sure it's not already selected
                 # Get the first food in the chain (skip mice and bones)
                 first_food = None
                 for cell_row, cell_col in self.selected_cells:
-                    if (cell_row, cell_col) not in self.mice and (cell_row, cell_col) not in self.bones and self.board[cell_row][cell_col] is not None:
+                    if (cell_row, cell_col) not in self.mice and (cell_row, cell_col) not in self.bones and \
+                            self.board[cell_row][cell_col] is not None:
                         first_food = self.board[cell_row][cell_col]
                         break
 
@@ -1420,10 +1471,8 @@ class Game:
             # Count regular food cells (not mice or bones)
             regular_food_cells = sum(1 for cell in self.selected_cells
                                      if cell not in self.mice and cell not in self.bones)
-            mice_caught = sum(
-                1 for mouse in self.mice if mouse in self.selected_cells)
-            bones_caught = sum(
-                1 for bone in self.bones if bone in self.selected_cells)
+            mice_caught = sum(1 for mouse in self.mice if mouse in self.selected_cells)
+            bones_caught = sum(1 for bone in self.bones if bone in self.selected_cells)
 
             food_points = regular_food_cells
             mouse_points = mice_caught * 4
@@ -1440,8 +1489,7 @@ class Game:
             self.displayed_score = self.fruits_collected
             # Show negative points in red if there's a penalty
             if self.total_points_to_add < 0:
-                # Use :+d to always show the sign
-                self.points_popup_text = f"{self.total_points_to_add:+d}"
+                self.points_popup_text = f"{self.total_points_to_add:+d}"  # Use :+d to always show the sign
             else:
                 self.points_popup_text = f"+{self.total_points_to_add}"
             self.points_popup_alpha = 255
@@ -1459,8 +1507,7 @@ class Game:
                 # Set up initial animation segment
                 self.kitty_start_pos = self.animation_path[0]
                 self.kitty_target_pos = self.animation_path[1]
-                # Convert to list for floating point
-                self.kitty_current_pos = list(self.kitty_start_pos)
+                self.kitty_current_pos = list(self.kitty_start_pos)  # Convert to list for floating point
                 self.kitty_animation_active = True
                 self.kitty_animation_start_time = time.time()
 
@@ -1516,33 +1563,29 @@ class Game:
                 # Highlight selected cells
                 if (row, col) in self.selected_cells:
                     if (row, col) == self.selected_cells[-1]:
-                        # Light blue for most recent
-                        cell_color = (100, 100, 255)
+                        cell_color = (100, 100, 255)  # Light blue for most recent
                     else:
                         cell_color = BLUE
 
-                pygame.draw.rect(self.screen, cell_color,
-                                 (x, y, CELL_SIZE, CELL_SIZE))
+                pygame.draw.rect(self.screen, cell_color, (x, y, CELL_SIZE, CELL_SIZE))
 
                 # Draw food image (if there is one and no mouse, bone, or kitty)
                 food_type = self.board[row][col]
-                if food_type is not None and (row, col) not in self.mice and (row, col) not in self.bones and (row, col) != self.kitty_pos:
+                if food_type is not None and (row, col) not in self.mice and (row, col) not in self.bones and (row,
+                                                                                                               col) != self.kitty_pos:
                     food_image = self.food_images[food_type]
-                    food_rect = food_image.get_rect(
-                        center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2))
+                    food_rect = food_image.get_rect(center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2))
                     self.screen.blit(food_image, food_rect)
 
                 # Draw mouse if present
                 if (row, col) in self.mice:
-                    mouse_rect = MOUSE_IMAGE.get_rect(
-                        center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2))
+                    mouse_rect = MOUSE_IMAGE.get_rect(center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2))
                     self.screen.blit(MOUSE_IMAGE, mouse_rect)
 
                 # Draw bone if present
                 if (row, col) in self.bones:
-                    bones_rect = BONES_IMAGE.get_rect(
-                        center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2))
-                    self.screen.blit(BONES_IMAGE, bones_rect)
+                    bones_rect = PENALTY_IMAGE.get_rect(center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2))
+                    self.screen.blit(PENALTY_IMAGE, bones_rect)
 
         # Update kitty animation if active
         if self.kitty_animation_active:
@@ -1579,8 +1622,7 @@ class Game:
         current_time = time.time() - self.start_time if not self.game_over else self.elapsed_time
 
         # Draw score and goal
-        score_text = self.font.render(
-            f"Score: {self.displayed_score}/{FOOD_GOAL}", True, BLACK)
+        score_text = self.font.render(f"Score: {self.displayed_score}/{FOOD_GOAL}", True, BLACK)
         score_rect = score_text.get_rect(topleft=(20, SCREEN_HEIGHT - 80))
         self.screen.blit(score_text, score_rect)
 
@@ -1588,14 +1630,11 @@ class Game:
         if self.score_animation_active and self.points_popup_alpha > 0:
             popup_font = self.font
             # Use red color for negative points, green for positive
-            popup_color = (255, 0, 0) if self.total_points_to_add < 0 else (
-                50, 205, 50)
-            popup_text = popup_font.render(
-                self.points_popup_text, True, popup_color)
+            popup_color = (255, 0, 0) if self.total_points_to_add < 0 else (50, 205, 50)
+            popup_text = popup_font.render(self.points_popup_text, True, popup_color)
             popup_text.set_alpha(self.points_popup_alpha)
             # Position next to score
-            popup_rect = popup_text.get_rect(
-                left=score_rect.right + 10, centery=score_rect.centery)
+            popup_rect = popup_text.get_rect(left=score_rect.right + 10, centery=score_rect.centery)
             self.screen.blit(popup_text, popup_rect)
 
         # Draw chain result preview if there are selected cells
@@ -1605,17 +1644,14 @@ class Game:
 
             # Show preview next to score
             preview_color = (255, 0, 0) if chain_result < 0 else (50, 205, 50)
-            preview_text = self.font.render(
-                f"({chain_result:+d})", True, preview_color)
-            preview_rect = preview_text.get_rect(
-                left=score_rect.right + 10, centery=score_rect.centery)
+            preview_text = self.font.render(f"({chain_result:+d})", True, preview_color)
+            preview_rect = preview_text.get_rect(left=score_rect.right + 10, centery=score_rect.centery)
             self.screen.blit(preview_text, preview_rect)
 
         # Draw timer
         minutes = int(current_time) // 60
         seconds = int(current_time) % 60
-        time_text = self.font.render(
-            f"Time: {minutes}:{seconds:02d}", True, BLACK)
+        time_text = self.font.render(f"Time: {minutes}:{seconds:02d}", True, BLACK)
         self.screen.blit(time_text, (SCREEN_WIDTH - 150, SCREEN_HEIGHT - 80))
 
         # Draw moves
@@ -1625,34 +1661,25 @@ class Game:
 
         # Draw best score/time
         if self.best_score > 0:
-            best_score_text = self.small_font.render(
-                f"Best: {self.best_score} points", True, BLUE)
-            self.screen.blit(
-                best_score_text, (SCREEN_WIDTH - 150, SCREEN_HEIGHT - 40))
+            best_score_text = self.small_font.render(f"Best: {self.best_score} points", True, BLUE)
+            self.screen.blit(best_score_text, (SCREEN_WIDTH - 150, SCREEN_HEIGHT - 40))
 
         # Draw collect button
         button_color = LIGHT_GREEN if len(self.selected_cells) > 1 else GRAY
-        pygame.draw.rect(self.screen, button_color,
-                         self.collect_button_rect, border_radius=5)
-        pygame.draw.rect(self.screen, BLACK,
-                         self.collect_button_rect, 2, border_radius=5)
+        pygame.draw.rect(self.screen, button_color, self.collect_button_rect, border_radius=5)
+        pygame.draw.rect(self.screen, BLACK, self.collect_button_rect, 2, border_radius=5)
 
         collect_text = self.font.render("Collect", True, BLACK)
-        text_rect = collect_text.get_rect(
-            center=self.collect_button_rect.center)
+        text_rect = collect_text.get_rect(center=self.collect_button_rect.center)
         self.screen.blit(collect_text, text_rect)
 
         # Draw reload button with counter
         reload_color = ORANGE if self.reload_count > 0 else GRAY
-        pygame.draw.rect(self.screen, reload_color,
-                         self.reload_button_rect, border_radius=5)
-        pygame.draw.rect(self.screen, BLACK,
-                         self.reload_button_rect, 2, border_radius=5)
+        pygame.draw.rect(self.screen, reload_color, self.reload_button_rect, border_radius=5)
+        pygame.draw.rect(self.screen, BLACK, self.reload_button_rect, 2, border_radius=5)
 
-        reload_text = self.font.render(
-            f"Reload ({self.reload_count})", True, BLACK)
-        reload_text_rect = reload_text.get_rect(
-            center=self.reload_button_rect.center)
+        reload_text = self.font.render(f"Reload ({self.reload_count})", True, BLACK)
+        reload_text_rect = reload_text.get_rect(center=self.reload_button_rect.center)
         self.screen.blit(reload_text, reload_text_rect)
 
         # Draw results screen if game is over
@@ -1688,8 +1715,7 @@ class Game:
 
                 # Ease-out function for smoother deceleration
                 progress = panel_elapsed / panel_duration
-                ease_factor = 1 - (1 - progress) * \
-                    (1 - progress)  # Quadratic ease out
+                ease_factor = 1 - (1 - progress) * (1 - progress)  # Quadratic ease out
 
                 # Interpolate from off-screen to target position
                 self.panel_y_offset = -400 + (target_y + 400) * ease_factor
@@ -1718,16 +1744,14 @@ class Game:
         if elapsed < counter_duration:
             # Calculate current score to display (with easing)
             progress = elapsed / counter_duration
-            ease_factor = 1 - (1 - progress) * \
-                (1 - progress)  # Quadratic ease out
+            ease_factor = 1 - (1 - progress) * (1 - progress)  # Quadratic ease out
 
             # Handle both positive and negative final scores
             start_score = 0  # Always start from 0 in the results screen
             target_score = self.fruits_collected
 
             # Animate from start_score to target_score
-            self.displayed_score = int(
-                start_score + (target_score - start_score) * ease_factor)
+            self.displayed_score = int(start_score + (target_score - start_score) * ease_factor)
 
             # Calculate stars to show based on thresholds
             self.stars_shown = 0
@@ -1742,8 +1766,7 @@ class Game:
 
     def draw_results_screen(self):
         # Create a semi-transparent overlay with current alpha
-        overlay = pygame.Surface(
-            (SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, self.dim_alpha))  # Variable opacity black
         self.screen.blit(overlay, (0, 0))
 
@@ -1754,10 +1777,8 @@ class Game:
         panel_y = self.panel_y_offset
 
         # Draw panel background
-        pygame.draw.rect(self.screen, WHITE, (panel_x, panel_y,
-                         panel_width, panel_height), border_radius=10)
-        pygame.draw.rect(self.screen, BLACK, (panel_x, panel_y,
-                         panel_width, panel_height), 2, border_radius=10)
+        pygame.draw.rect(self.screen, WHITE, (panel_x, panel_y, panel_width, panel_height), border_radius=10)
+        pygame.draw.rect(self.screen, BLACK, (panel_x, panel_y, panel_width, panel_height), 2, border_radius=10)
 
         # Draw game result
         if self.fruits_collected >= FOOD_GOAL:
@@ -1765,8 +1786,7 @@ class Game:
         else:
             result_text = self.large_font.render("GAME OVER", True, RED)
 
-        result_rect = result_text.get_rect(
-            center=(panel_x + panel_width // 2, panel_y + 40))
+        result_rect = result_text.get_rect(center=(panel_x + panel_width // 2, panel_y + 40))
         self.screen.blit(result_text, result_rect)
 
         # Update counter animation if active
@@ -1774,10 +1794,8 @@ class Game:
             self.update_counter_animation()
 
         # Draw score with counter animation
-        score_text = self.font.render(
-            f"Food collected: {self.displayed_score}", True, BLACK)
-        score_rect = score_text.get_rect(
-            center=(panel_x + panel_width // 2, panel_y + 80))
+        score_text = self.font.render(f"Food collected: {self.displayed_score}", True, BLACK)
+        score_rect = score_text.get_rect(center=(panel_x + panel_width // 2, panel_y + 80))
         self.screen.blit(score_text, score_rect)
 
         # Draw stars
@@ -1800,23 +1818,19 @@ class Game:
             f"0★: 0-74 | 1★: 75-95 | 2★: 96-125 | 3★: 126+",
             True, BLACK
         )
-        threshold_rect = threshold_text.get_rect(
-            center=(panel_x + panel_width // 2, panel_y + 180))
+        threshold_rect = threshold_text.get_rect(center=(panel_x + panel_width // 2, panel_y + 180))
         self.screen.blit(threshold_text, threshold_rect)
 
         # Draw time
         minutes = int(self.elapsed_time) // 60
         seconds = int(self.elapsed_time) % 60
-        time_text = self.font.render(
-            f"Time: {minutes}:{seconds:02d}", True, BLACK)
-        time_rect = time_text.get_rect(
-            center=(panel_x + panel_width // 2, panel_y + 220))
+        time_text = self.font.render(f"Time: {minutes}:{seconds:02d}", True, BLACK)
+        time_rect = time_text.get_rect(center=(panel_x + panel_width // 2, panel_y + 220))
         self.screen.blit(time_text, time_rect)
 
         # Draw restart instruction
         restart_text = self.font.render("Press C to restart", True, BLUE)
-        restart_rect = restart_text.get_rect(
-            center=(panel_x + panel_width // 2, panel_y + 260))
+        restart_rect = restart_text.get_rect(center=(panel_x + panel_width // 2, panel_y + 260))
         self.screen.blit(restart_text, restart_rect)
 
     def draw_direction_arrows(self):
@@ -1829,10 +1843,8 @@ class Game:
         end_cell = self.selected_cells[0]
 
         # Calculate center positions of cells
-        start_x = start_cell[1] * \
-            (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
-        start_y = start_cell[0] * \
-            (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+        start_x = start_cell[1] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+        start_y = start_cell[0] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
         end_x = end_cell[1] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
         end_y = end_cell[0] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
 
@@ -1844,8 +1856,7 @@ class Game:
         angle = calculate_angle(start_cell, end_cell)
 
         # Rotate arrow image
-        rotated_arrow = pygame.transform.rotate(
-            ARROW_IMAGE, -angle)  # Negative for clockwise rotation
+        rotated_arrow = pygame.transform.rotate(ARROW_IMAGE, -angle)  # Negative for clockwise rotation
         arrow_rect = rotated_arrow.get_rect(center=(mid_x, mid_y))
 
         # Draw arrow
@@ -1860,14 +1871,10 @@ class Game:
             end_cell = self.selected_cells[i + 1]
 
             # Calculate center positions of cells
-            start_x = start_cell[1] * \
-                (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
-            start_y = start_cell[0] * \
-                (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
-            end_x = end_cell[1] * (CELL_SIZE + MARGIN) + \
-                MARGIN + CELL_SIZE // 2
-            end_y = end_cell[0] * (CELL_SIZE + MARGIN) + \
-                MARGIN + CELL_SIZE // 2
+            start_x = start_cell[1] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            start_y = start_cell[0] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            end_x = end_cell[1] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            end_y = end_cell[0] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
 
             # Calculate midpoint between cells for arrow placement
             mid_x = (start_x + end_x) // 2
@@ -1877,8 +1884,7 @@ class Game:
             angle = calculate_angle(start_cell, end_cell)
 
             # Rotate arrow image
-            rotated_arrow = pygame.transform.rotate(
-                ARROW_IMAGE, -angle)  # Negative for clockwise rotation
+            rotated_arrow = pygame.transform.rotate(ARROW_IMAGE, -angle)  # Negative for clockwise rotation
             arrow_rect = rotated_arrow.get_rect(center=(mid_x, mid_y))
 
             # Draw arrow
@@ -1894,8 +1900,7 @@ class Game:
                         try:
                             score = int(parts[1].split(": ")[1])
                             time_str = parts[3].split(": ")[1]
-                            time_val = sum(
-                                float(x) * 60 ** i for i, x in enumerate(reversed(time_str.split(":"))))
+                            time_val = sum(float(x) * 60 ** i for i, x in enumerate(reversed(time_str.split(":"))))
 
                             # Update best score if higher
                             if score > self.best_score:
@@ -1948,24 +1953,20 @@ class Game:
             # Calculate progress with easing
             progress = elapsed / animation_duration
             # Use ease-out function for smoother movement
-            ease_factor = 1 - (1 - progress) * \
-                (1 - progress)  # Quadratic ease out
+            ease_factor = 1 - (1 - progress) * (1 - progress)  # Quadratic ease out
 
             # Interpolate between start and target positions
             start_row, start_col = self.kitty_start_pos
             target_row, target_col = self.kitty_target_pos
 
             # Update current position (floating point for smooth animation)
-            self.kitty_current_pos[0] = start_row + \
-                (target_row - start_row) * ease_factor
-            self.kitty_current_pos[1] = start_col + \
-                (target_col - start_col) * ease_factor
+            self.kitty_current_pos[0] = start_row + (target_row - start_row) * ease_factor
+            self.kitty_current_pos[1] = start_col + (target_col - start_col) * ease_factor
         else:
             # Current segment complete
 
             # Remove food from the cell the kitty just landed on
-            # The cell we just moved to
-            cell_pos = self.animation_path[self.current_path_index + 1]
+            cell_pos = self.animation_path[self.current_path_index + 1]  # The cell we just moved to
             row, col = cell_pos
 
             # Only remove food if this is a selected cell (not the kitty's starting position)
@@ -2002,8 +2003,7 @@ class Game:
                     # This distributes the negative points throughout the animation
                     target_score = self.fruits_collected + self.total_points_to_add
                     start_score = self.fruits_collected
-                    self.displayed_score = int(
-                        start_score + (target_score - start_score) * progress_ratio)
+                    self.displayed_score = int(start_score + (target_score - start_score) * progress_ratio)
                 else:
                     # For positive scores, just add points as we go
                     self.points_added_so_far += points_for_this_cell
@@ -2031,8 +2031,7 @@ class Game:
                 # Move to next segment
                 self.kitty_start_pos = self.animation_path[self.current_path_index]
                 self.kitty_target_pos = self.animation_path[self.current_path_index + 1]
-                self.kitty_current_pos = list(
-                    self.kitty_start_pos)  # Reset current position
+                self.kitty_current_pos = list(self.kitty_start_pos)  # Reset current position
                 self.kitty_animation_start_time = time.time()  # Reset timer for next segment
 
     def update_fruit_replacement(self):
@@ -2124,8 +2123,7 @@ class Game:
             TAP_SOUND.play()
 
         # Regenerate the board but keep kitty position
-        self.board = [[random.choice(self.foods) for _ in range(
-            GRID_SIZE)] for _ in range(GRID_SIZE)]
+        self.board = [[random.choice(self.foods) for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
 
         # Clear mice and bones
         self.mice = []
@@ -2156,11 +2154,9 @@ class Game:
                     elif event.key == pygame.K_ESCAPE:  # Return to main menu
                         running = False
                         return
-                    # Use custom collect key
-                    elif event.key == SETTINGS["collect_key"] and not self.game_over:
+                    elif event.key == SETTINGS["collect_key"] and not self.game_over:  # Use custom collect key
                         self.collect_foods()
-                    # Use custom reload key
-                    elif event.key == SETTINGS["reload_key"] and not self.game_over:
+                    elif event.key == SETTINGS["reload_key"] and not self.game_over:  # Use custom reload key
                         self.reload_field()
 
                 elif event.type == pygame.MOUSEBUTTONDOWN and not self.game_over:
