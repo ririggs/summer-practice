@@ -13,8 +13,10 @@ pygame.init()
 GRID_SIZE = 7
 CELL_SIZE = 80
 MARGIN = 10
-SCREEN_WIDTH = GRID_SIZE * CELL_SIZE + (GRID_SIZE + 1) * MARGIN
-SCREEN_HEIGHT = GRID_SIZE * CELL_SIZE + (GRID_SIZE + 1) * MARGIN + 100  # Extra space for UI
+SCREEN_WIDTH = 1280  # Increased to match background image width
+SCREEN_HEIGHT = 800  # Increased to match background image height
+BOARD_OFFSET_X = 490  # X offset to center the board in the yellow square
+BOARD_OFFSET_Y = 200  # Y offset to center the board in the yellow square
 
 # Colors
 WHITE = (255, 255, 255)
@@ -28,8 +30,8 @@ GOLD = (255, 215, 0)
 
 # Game parameters
 MAX_MOVES = 10
-FRUIT_GOAL = 75
-FRUITS_PER_GAME = 3  # Number of fruit types to use in each game
+FOOD_GOAL = 75
+FOOD_ITEMS_PER_GAME = 3  # Number of food types to use in each game
 
 # Star rating thresholds
 STAR_THRESHOLDS = [
@@ -40,14 +42,20 @@ STAR_THRESHOLDS = [
 ]
 
 # Load images
-def load_image(filename, subdirectory=None):
+def load_image(filename, subdirectory=None, scale=True, size=None):
     if subdirectory:
         path = os.path.join('assets', subdirectory, filename)
     else:
         path = os.path.join('assets', filename)
     try:
         image = pygame.image.load(path)
-        return pygame.transform.scale(image, (CELL_SIZE - 10, CELL_SIZE - 10))
+        if scale:
+            if size:
+                return pygame.transform.scale(image, size)
+            else:
+                return pygame.transform.scale(image, (CELL_SIZE - 10, CELL_SIZE - 10))
+        else:
+            return image
     except pygame.error as e:
         print(f"Error loading image {filename}: {e}")
         # Create a colored square as fallback
@@ -55,48 +63,50 @@ def load_image(filename, subdirectory=None):
         surface.fill((255, 0, 0))
         return surface
 
-# Load all available fruit images from assets/fruits directory
-def load_all_fruits():
-    all_fruits = {}
+# Load all available food images from assets/food directory
+def load_all_foods():
+    all_foods = {}
     try:
-        fruits_dir = os.path.join('assets', 'fruits')
+        food_dir = os.path.join('assets', 'food')
         # Create the directory if it doesn't exist
-        if not os.path.exists(fruits_dir):
-            print("Fruits directory not found. Creating it.")
-            os.makedirs(fruits_dir, exist_ok=True)
+        if not os.path.exists(food_dir):
+            print("Food directory not found. Creating it.")
+            os.makedirs(food_dir, exist_ok=True)
             
-        for filename in os.listdir(fruits_dir):
+        for filename in os.listdir(food_dir):
             if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-                fruit_name = os.path.splitext(filename)[0]  # Remove extension
-                all_fruits[fruit_name] = load_image(filename, 'fruits')
+                food_name = os.path.splitext(filename)[0]  # Remove extension
+                all_foods[food_name] = load_image(filename, 'food')
     except (FileNotFoundError, PermissionError) as e:
-        print(f"Error accessing fruits directory: {e}")
-        # Fallback to default fruits
-        all_fruits = {
-            'apple': load_image('apple.png'),
-            'orange': load_image('orange.png'),
-            'pear': load_image('pear.png')
+        print(f"Error accessing food directory: {e}")
+        # Fallback to default foods
+        all_foods = {
+            'ball': load_image('ball.png'),
+            'bowl': load_image('bowl.png'),
+            'can': load_image('can.png')
         }
     
-    # Ensure we have at least 3 fruits
-    if len(all_fruits) < FRUITS_PER_GAME:
-        print(f"Not enough fruit images found. Need at least {FRUITS_PER_GAME}.")
+    # Ensure we have at least 3 foods
+    if len(all_foods) < FOOD_ITEMS_PER_GAME:
+        print(f"Not enough food images found. Need at least {FOOD_ITEMS_PER_GAME}.")
         # Create some colored squares as fallback
         colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
-        for i in range(FRUITS_PER_GAME - len(all_fruits)):
+        for i in range(FOOD_ITEMS_PER_GAME - len(all_foods)):
             surface = pygame.Surface((CELL_SIZE - 10, CELL_SIZE - 10))
             surface.fill(colors[i % len(colors)])
-            all_fruits[f'fruit{i+1}'] = surface
+            all_foods[f'food{i+1}'] = surface
     
-    return all_fruits
+    return all_foods
 
-# Load all available fruits
-ALL_FRUIT_IMAGES = load_all_fruits()
+# Load all available foods
+ALL_FOOD_IMAGES = load_all_foods()
 
 # Mouse and kitty images
 MOUSE_IMAGE = load_image('mouse.png')
 KITTY_IMAGE = load_image('kitty.png')
 ARROW_IMAGE = load_image('arrow_right.png')
+BONES_IMAGE = load_image('bones.png')  # Load bones image
+BACKGROUND_IMAGE = load_image('background.png', scale=False)  # Load background without scaling
 
 # Create star images
 def create_star_image(filled=True, size=50):
@@ -143,7 +153,7 @@ class Game:
         # Create collect button
         self.collect_button_rect = pygame.Rect(
             SCREEN_WIDTH // 2 - 60, 
-            SCREEN_HEIGHT - 50, 
+            BOARD_OFFSET_Y + GRID_SIZE * (CELL_SIZE + MARGIN) + MARGIN + 50, 
             120, 
             40
         )
@@ -156,12 +166,13 @@ class Game:
         self.reset_game()
         
     def reset_game(self):
-        # Select random fruit types for this game
-        self.select_game_fruits()
+        # Select random food types for this game
+        self.select_game_foods()
         
         # Initialize game state
-        self.board = [[random.choice(self.fruits) for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+        self.board = [[random.choice(self.foods) for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
         self.mice = []  # List to store mouse positions [(x, y), ...]
+        self.bones = []  # List to store bone positions [(x, y), ...]
         self.selected_cells = []  # List to store selected cells
         self.score = 0
         self.fruits_collected = 0
@@ -174,6 +185,8 @@ class Game:
         self.stars_earned = 0
         self.show_results = False
         self.should_add_mouse = False  # Flag to track if we should add a mouse after animation
+        self.should_add_bones = False  # Flag to track if we should add bones after animation
+        self.chain_result_preview = 0  # Preview of the chain result
         
         # Animation variables
         self.dim_alpha = 0  # Opacity of the dim overlay (0-180)
@@ -213,23 +226,23 @@ class Game:
         # Place kitty in the middle of the board
         self.kitty_pos = (GRID_SIZE // 2, GRID_SIZE // 2)  # (3,3) for a 7x7 grid
         
-        # Remove fruit from kitty's position
+        # Remove food from kitty's position
         kitty_row, kitty_col = self.kitty_pos
         self.board[kitty_row][kitty_col] = None
     
-    def select_game_fruits(self):
-        # Select random fruit types for this game
-        all_fruit_names = list(ALL_FRUIT_IMAGES.keys())
-        # Ensure we have enough fruits to choose from
-        if len(all_fruit_names) <= FRUITS_PER_GAME:
-            self.fruits = all_fruit_names
+    def select_game_foods(self):
+        # Select random food types for this game
+        all_food_names = list(ALL_FOOD_IMAGES.keys())
+        # Ensure we have enough foods to choose from
+        if len(all_food_names) <= FOOD_ITEMS_PER_GAME:
+            self.foods = all_food_names
         else:
-            self.fruits = random.sample(all_fruit_names, FRUITS_PER_GAME)
+            self.foods = random.sample(all_food_names, FOOD_ITEMS_PER_GAME)
         
-        # Create a dictionary of fruit images for this game
-        self.fruit_images = {fruit: ALL_FRUIT_IMAGES[fruit] for fruit in self.fruits}
+        # Create a dictionary of food images for this game
+        self.food_images = {food: ALL_FOOD_IMAGES[food] for food in self.foods}
         
-        print(f"Selected fruits for this game: {self.fruits}")
+        print(f"Selected foods for this game: {self.foods}")
         
     def add_mouse(self):
         # Add a mouse to a random empty cell if there are fewer than 3 mice
@@ -239,15 +252,44 @@ class Game:
             if empty_cells:
                 pos = random.choice(empty_cells)
                 self.mice.append(pos)
-                # Remove fruit under mouse
+                # Remove food under mouse
                 row, col = pos
                 self.board[row][col] = None
     
+    def add_bones(self):
+        # Add 2 bones to random empty cells
+        for _ in range(2):
+            empty_cells = [(x, y) for x in range(GRID_SIZE) for y in range(GRID_SIZE) 
+                          if (x, y) not in self.mice and (x, y) not in self.bones and (x, y) != self.kitty_pos]
+            if empty_cells:
+                pos = random.choice(empty_cells)
+                self.bones.append(pos)
+                # Remove food under bone
+                row, col = pos
+                self.board[row][col] = None
+
     def is_adjacent_to_kitty(self, row, col):
         # Check if the cell is adjacent to the kitty (including diagonals)
         kitty_row, kitty_col = self.kitty_pos
         return abs(row - kitty_row) <= 1 and abs(col - kitty_col) <= 1 and (row, col) != self.kitty_pos
     
+    def calculate_chain_result(self):
+        """Calculate the potential result of collecting the current chain"""
+        if len(self.selected_cells) < 2:
+            return 0
+            
+        # Count regular food cells (not mice or bones)
+        regular_food_cells = sum(1 for cell in self.selected_cells 
+                               if cell not in self.mice and cell not in self.bones)
+        mice_caught = sum(1 for mouse in self.mice if mouse in self.selected_cells)
+        bones_caught = sum(1 for bone in self.bones if bone in self.selected_cells)
+        
+        food_points = regular_food_cells
+        mouse_points = mice_caught * 4
+        bones_penalty = bones_caught * -10  # -10 points per bone
+        
+        return food_points + mouse_points + bones_penalty
+
     def is_valid_selection(self, row, col):
         # Check if the cell can be selected
         
@@ -264,26 +306,26 @@ class Game:
         
         # Check if it's adjacent to the last selected cell (including diagonals)
         if abs(row - last_row) <= 1 and abs(col - last_col) <= 1:
-            # Check if it's a mouse (can always be selected)
-            if (row, col) in self.mice:
+            # Check if it's a mouse or bone (can always be selected)
+            if (row, col) in self.mice or (row, col) in self.bones:
                 return (row, col) not in self.selected_cells  # Just make sure we haven't selected it already
                 
-            # If not a mouse, check if it's the same fruit type as the first selection
+            # If not a mouse or bone, check if it's the same food type as the first selection
             if (row, col) not in self.selected_cells:  # Make sure it's not already selected
-                # Get the first fruit in the chain (skip mice)
-                first_fruit = None
+                # Get the first food in the chain (skip mice and bones)
+                first_food = None
                 for cell_row, cell_col in self.selected_cells:
-                    if (cell_row, cell_col) not in self.mice and self.board[cell_row][cell_col] is not None:
-                        first_fruit = self.board[cell_row][cell_col]
+                    if (cell_row, cell_col) not in self.mice and (cell_row, cell_col) not in self.bones and self.board[cell_row][cell_col] is not None:
+                        first_food = self.board[cell_row][cell_col]
                         break
                 
-                # If we couldn't find a fruit in the chain yet, this is the first fruit
-                if first_fruit is None:
+                # If we couldn't find a food in the chain yet, this is the first food
+                if first_food is None:
                     return True
                     
-                current_fruit = self.board[row][col]
-                # Make sure it's the same fruit type (if it's not None)
-                return current_fruit is None or current_fruit == first_fruit
+                current_food = self.board[row][col]
+                # Make sure it's the same food type (if it's not None)
+                return current_food is None or current_food == first_food
             
         return False
         
@@ -294,24 +336,34 @@ class Game:
                 return True
         return False
         
-    def collect_fruits(self):
-        # Collect selected fruits, remove mice on path, and update score
-        if len(self.selected_cells) > 1:  # Need at least 2 fruits to collect
+    def collect_foods(self):
+        # Collect selected foods, remove mice on path, and update score
+        if len(self.selected_cells) > 1:  # Need at least 2 foods to collect
             # Calculate points to add
-            fruit_points = len(self.selected_cells)
+            # Count regular food cells (not mice or bones)
+            regular_food_cells = sum(1 for cell in self.selected_cells 
+                                   if cell not in self.mice and cell not in self.bones)
             mice_caught = sum(1 for mouse in self.mice if mouse in self.selected_cells)
+            bones_caught = sum(1 for bone in self.bones if bone in self.selected_cells)
+            
+            food_points = regular_food_cells
             mouse_points = mice_caught * 4
-            self.total_points_to_add = fruit_points + mouse_points
+            bones_penalty = bones_caught * -10  # -10 points per bone
+            self.total_points_to_add = food_points + mouse_points + bones_penalty
             
             # Set up score animation
             self.score_animation_active = True
             self.points_added_so_far = 0
             self.displayed_score = self.fruits_collected
-            self.points_popup_text = f"+{self.total_points_to_add}"
+            # Show negative points in red if there's a penalty
+            if self.total_points_to_add < 0:
+                self.points_popup_text = f"{self.total_points_to_add:+d}"  # Use :+d to always show the sign
+            else:
+                self.points_popup_text = f"+{self.total_points_to_add}"
             self.points_popup_alpha = 255
             self.points_popup_time = time.time()
             
-            # Store old kitty position to fill with fruit later
+            # Store old kitty position to fill with food later
             self.old_kitty_pos = self.kitty_pos
             
             # Start kitty movement animation through the selected path
@@ -327,7 +379,7 @@ class Game:
                 self.kitty_animation_active = True
                 self.kitty_animation_start_time = time.time()
                 
-                # Store cells that need to be replaced with new fruits later
+                # Store cells that need to be replaced with new foods later
                 self.cells_to_replace = self.selected_cells.copy()
             
             # Increment moves
@@ -336,6 +388,9 @@ class Game:
             # We'll add a mouse after the animation completes, not here
             # Store if we need to add a mouse
             self.should_add_mouse = (self.moves % 2 == 0)
+            
+            # Add bones every 2 steps
+            self.should_add_bones = (self.moves % 2 == 0)
                 
             # Check if this is the final move (but don't end the game yet)
             if self.moves >= MAX_MOVES:
@@ -350,7 +405,7 @@ class Game:
     def calculate_stars(self):
         # Calculate stars based on score
         self.stars_earned = 0
-        if self.fruits_collected < FRUIT_GOAL:
+        if self.fruits_collected < FOOD_GOAL:
             # Game lost, no stars
             self.stars_earned = 0
         else:
@@ -360,15 +415,15 @@ class Game:
                     self.stars_earned = stars
         
     def draw_board(self):
-        # Fill the background
-        self.screen.fill(WHITE)
+        # Draw the background image
+        self.screen.blit(BACKGROUND_IMAGE, (0, 0))
         
         # Draw the grid and fruits
         for row in range(GRID_SIZE):
             for col in range(GRID_SIZE):
-                # Calculate position
-                x = col * (CELL_SIZE + MARGIN) + MARGIN
-                y = row * (CELL_SIZE + MARGIN) + MARGIN
+                # Calculate position with offset
+                x = BOARD_OFFSET_X + col * (CELL_SIZE + MARGIN) + MARGIN
+                y = BOARD_OFFSET_Y + row * (CELL_SIZE + MARGIN) + MARGIN
                 
                 # Draw cell background
                 cell_color = GRAY
@@ -382,17 +437,22 @@ class Game:
                         
                 pygame.draw.rect(self.screen, cell_color, (x, y, CELL_SIZE, CELL_SIZE))
                 
-                # Draw fruit image (if there is one and no mouse or kitty)
-                fruit_type = self.board[row][col]
-                if fruit_type is not None and (row, col) not in self.mice and (row, col) != self.kitty_pos:
-                    fruit_image = self.fruit_images[fruit_type]
-                    fruit_rect = fruit_image.get_rect(center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2))
-                    self.screen.blit(fruit_image, fruit_rect)
+                # Draw food image (if there is one and no mouse, bone, or kitty)
+                food_type = self.board[row][col]
+                if food_type is not None and (row, col) not in self.mice and (row, col) not in self.bones and (row, col) != self.kitty_pos:
+                    food_image = self.food_images[food_type]
+                    food_rect = food_image.get_rect(center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2))
+                    self.screen.blit(food_image, food_rect)
                 
                 # Draw mouse if present
                 if (row, col) in self.mice:
                     mouse_rect = MOUSE_IMAGE.get_rect(center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2))
                     self.screen.blit(MOUSE_IMAGE, mouse_rect)
+                
+                # Draw bone if present
+                if (row, col) in self.bones:
+                    bones_rect = BONES_IMAGE.get_rect(center=(x + CELL_SIZE // 2, y + CELL_SIZE // 2))
+                    self.screen.blit(BONES_IMAGE, bones_rect)
         
         # Update kitty animation if active
         if self.kitty_animation_active:
@@ -410,15 +470,15 @@ class Game:
         if self.kitty_animation_active:
             # Draw kitty at animated position
             row, col = self.kitty_current_pos
-            x = col * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
-            y = row * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            x = BOARD_OFFSET_X + col * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            y = BOARD_OFFSET_Y + row * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
             kitty_rect = KITTY_IMAGE.get_rect(center=(x, y))
             self.screen.blit(KITTY_IMAGE, kitty_rect)
         else:
             # Draw kitty at static position
             row, col = self.kitty_pos
-            x = col * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
-            y = row * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            x = BOARD_OFFSET_X + col * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            y = BOARD_OFFSET_Y + row * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
             kitty_rect = KITTY_IMAGE.get_rect(center=(x, y))
             self.screen.blit(KITTY_IMAGE, kitty_rect)
         
@@ -429,34 +489,50 @@ class Game:
         current_time = time.time() - self.start_time if not self.game_over else self.elapsed_time
         
         # Draw score and goal
-        score_text = self.font.render(f"Score: {self.displayed_score}/{FRUIT_GOAL}", True, BLACK)
-        score_rect = score_text.get_rect(topleft=(20, SCREEN_HEIGHT - 80))
+        score_text = self.font.render(f"Score: {self.displayed_score}/{FOOD_GOAL}", True, BLACK)
+        score_rect = score_text.get_rect(topleft=(BOARD_OFFSET_X, BOARD_OFFSET_Y + GRID_SIZE * (CELL_SIZE + MARGIN) + MARGIN + 10))
         self.screen.blit(score_text, score_rect)
         
         # Draw points popup if active
         if self.score_animation_active and self.points_popup_alpha > 0:
             popup_font = self.font
-            popup_text = popup_font.render(self.points_popup_text, True, (50, 205, 50))
+            # Use red color for negative points, green for positive
+            popup_color = (255, 0, 0) if self.total_points_to_add < 0 else (50, 205, 50)
+            popup_text = popup_font.render(self.points_popup_text, True, popup_color)
             popup_text.set_alpha(self.points_popup_alpha)
             # Position next to score
             popup_rect = popup_text.get_rect(left=score_rect.right + 10, centery=score_rect.centery)
             self.screen.blit(popup_text, popup_rect)
+            
+        # Draw chain result preview if there are selected cells
+        elif len(self.selected_cells) >= 2 and not self.kitty_animation_active:
+            # Calculate potential result
+            chain_result = self.calculate_chain_result()
+            
+            # Show preview next to score
+            preview_color = (255, 0, 0) if chain_result < 0 else (50, 205, 50)
+            preview_text = self.font.render(f"({chain_result:+d})", True, preview_color)
+            preview_rect = preview_text.get_rect(left=score_rect.right + 10, centery=score_rect.centery)
+            self.screen.blit(preview_text, preview_rect)
         
         # Draw timer
         minutes = int(current_time) // 60
         seconds = int(current_time) % 60
         time_text = self.font.render(f"Time: {minutes}:{seconds:02d}", True, BLACK)
-        self.screen.blit(time_text, (SCREEN_WIDTH - 150, SCREEN_HEIGHT - 80))
+        time_rect = time_text.get_rect(topright=(BOARD_OFFSET_X + GRID_SIZE * (CELL_SIZE + MARGIN), BOARD_OFFSET_Y + GRID_SIZE * (CELL_SIZE + MARGIN) + MARGIN + 10))
+        self.screen.blit(time_text, time_rect)
         
         # Draw moves
         moves_text = self.small_font.render(f"Moves: {self.moves}/{MAX_MOVES}", True, 
                                           RED if self.moves >= MAX_MOVES - 2 else BLACK)
-        self.screen.blit(moves_text, (20, SCREEN_HEIGHT - 40))
+        moves_rect = moves_text.get_rect(topleft=(BOARD_OFFSET_X, BOARD_OFFSET_Y + GRID_SIZE * (CELL_SIZE + MARGIN) + MARGIN + 40))
+        self.screen.blit(moves_text, moves_rect)
         
         # Draw best score/time
         if self.best_score > 0:
             best_score_text = self.small_font.render(f"Best: {self.best_score} points", True, BLUE)
-            self.screen.blit(best_score_text, (SCREEN_WIDTH - 150, SCREEN_HEIGHT - 40))
+            best_score_rect = best_score_text.get_rect(topright=(BOARD_OFFSET_X + GRID_SIZE * (CELL_SIZE + MARGIN), BOARD_OFFSET_Y + GRID_SIZE * (CELL_SIZE + MARGIN) + MARGIN + 40))
+            self.screen.blit(best_score_text, best_score_rect)
         
         # Draw collect button
         button_color = LIGHT_GREEN if len(self.selected_cells) > 1 else GRAY
@@ -530,7 +606,13 @@ class Game:
             # Calculate current score to display (with easing)
             progress = elapsed / counter_duration
             ease_factor = 1 - (1 - progress) * (1 - progress)  # Quadratic ease out
-            self.displayed_score = int(self.fruits_collected * ease_factor)
+            
+            # Handle both positive and negative final scores
+            start_score = 0  # Always start from 0 in the results screen
+            target_score = self.fruits_collected
+            
+            # Animate from start_score to target_score
+            self.displayed_score = int(start_score + (target_score - start_score) * ease_factor)
             
             # Calculate stars to show based on thresholds
             self.stars_shown = 0
@@ -560,7 +642,7 @@ class Game:
         pygame.draw.rect(self.screen, BLACK, (panel_x, panel_y, panel_width, panel_height), 2, border_radius=10)
         
         # Draw game result
-        if self.fruits_collected >= FRUIT_GOAL:
+        if self.fruits_collected >= FOOD_GOAL:
             result_text = self.large_font.render("VICTORY!", True, GREEN)
         else:
             result_text = self.large_font.render("GAME OVER", True, RED)
@@ -573,7 +655,7 @@ class Game:
             self.update_counter_animation()
         
         # Draw score with counter animation
-        score_text = self.font.render(f"Fruits collected: {self.displayed_score}", True, BLACK)
+        score_text = self.font.render(f"Food collected: {self.displayed_score}", True, BLACK)
         score_rect = score_text.get_rect(center=(panel_x + panel_width // 2, panel_y + 80))
         self.screen.blit(score_text, score_rect)
         
@@ -621,11 +703,11 @@ class Game:
         start_cell = self.kitty_pos
         end_cell = self.selected_cells[0]
         
-        # Calculate center positions of cells
-        start_x = start_cell[1] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
-        start_y = start_cell[0] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
-        end_x = end_cell[1] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
-        end_y = end_cell[0] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+        # Calculate center positions of cells with offset
+        start_x = BOARD_OFFSET_X + start_cell[1] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+        start_y = BOARD_OFFSET_Y + start_cell[0] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+        end_x = BOARD_OFFSET_X + end_cell[1] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+        end_y = BOARD_OFFSET_Y + end_cell[0] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
         
         # Calculate midpoint between cells for arrow placement
         mid_x = (start_x + end_x) // 2
@@ -649,11 +731,11 @@ class Game:
             start_cell = self.selected_cells[i]
             end_cell = self.selected_cells[i + 1]
             
-            # Calculate center positions of cells
-            start_x = start_cell[1] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
-            start_y = start_cell[0] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
-            end_x = end_cell[1] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
-            end_y = end_cell[0] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            # Calculate center positions of cells with offset
+            start_x = BOARD_OFFSET_X + start_cell[1] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            start_y = BOARD_OFFSET_Y + start_cell[0] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            end_x = BOARD_OFFSET_X + end_cell[1] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
+            end_y = BOARD_OFFSET_Y + end_cell[0] * (CELL_SIZE + MARGIN) + MARGIN + CELL_SIZE // 2
             
             # Calculate midpoint between cells for arrow placement
             mid_x = (start_x + end_x) // 2
@@ -686,7 +768,7 @@ class Game:
                                 self.best_score = score
                                 
                             # Update best time if this score is >= goal and time is better
-                            if score >= FRUIT_GOAL and time_val < self.best_time:
+                            if score >= FOOD_GOAL and time_val < self.best_time:
                                 self.best_time = time_val
                         except (ValueError, IndexError):
                             continue
@@ -733,25 +815,45 @@ class Game:
         else:
             # Current segment complete
             
-            # Remove fruit from the cell the kitty just landed on
+            # Remove food from the cell the kitty just landed on
             cell_pos = self.animation_path[self.current_path_index + 1]  # The cell we just moved to
             row, col = cell_pos
             
-            # Only remove fruit if this is a selected cell (not the kitty's starting position)
+            # Only remove food if this is a selected cell (not the kitty's starting position)
             if cell_pos in self.cells_to_replace:
                 self.board[row][col] = None
                 
-                # Check if there's a mouse at this position and remove it
+                # Check if there's a mouse or bone at this position and remove it
                 if cell_pos in self.mice:
                     # Remove the mouse only when the kitty actually reaches it
                     self.mice.remove(cell_pos)
                     points_for_this_cell = 4  # Mouse
+                elif cell_pos in self.bones:
+                    # Remove the bone when the kitty reaches it
+                    self.bones.remove(cell_pos)
+                    points_for_this_cell = -10  # Bone penalty
                 else:
-                    points_for_this_cell = 1  # Regular fruit
+                    points_for_this_cell = 1  # Regular food
                     
                 # Update displayed score and points added so far
                 self.points_added_so_far += points_for_this_cell
-                self.displayed_score = self.fruits_collected + self.points_added_so_far
+                
+                # For smoother animation with negative points, use the precalculated total
+                # This prevents the score from going up and then suddenly dropping
+                if self.total_points_to_add < 0:
+                    # Calculate progress through the path (0.0 to 1.0)
+                    total_cells = len(self.cells_to_replace)
+                    current_cell = self.current_path_index  # How many cells we've processed
+                    progress_ratio = current_cell / total_cells
+                    
+                    # Animate smoothly from the starting score to the final score
+                    # This distributes the negative points throughout the animation
+                    target_score = self.fruits_collected + self.total_points_to_add
+                    start_score = self.fruits_collected
+                    self.displayed_score = int(start_score + (target_score - start_score) * progress_ratio)
+                else:
+                    # For positive scores, just add points as we go
+                    self.displayed_score = self.fruits_collected + self.points_added_so_far
             
             self.current_path_index += 1
             
@@ -761,13 +863,16 @@ class Game:
                 self.kitty_pos = self.animation_path[-1]
                 self.kitty_animation_active = False
                 
-                # Start fruit replacement animation with delay
+                # Start food replacement animation with delay
                 self.fruit_replacement_active = True
                 self.fruit_replacement_start_time = time.time()
                 
                 # Update actual score now
                 self.fruits_collected += self.total_points_to_add
                 self.score += self.total_points_to_add
+                
+                # Make sure the displayed score matches the actual score
+                self.displayed_score = self.fruits_collected
             else:
                 # Move to next segment
                 self.kitty_start_pos = self.animation_path[self.current_path_index]
@@ -779,7 +884,7 @@ class Game:
         if not self.fruit_replacement_active:
             return
             
-        # Wait for 0.5 second after kitty reaches final position before replacing fruits
+        # Wait for 0.5 second after kitty reaches final position before replacing foods
         delay = 0.5
         elapsed = time.time() - self.fruit_replacement_start_time
         
@@ -789,15 +894,20 @@ class Game:
                 self.add_mouse()
                 self.should_add_mouse = False
             
-            # Replace collected fruits with new ones (except kitty's final position)
-            for row, col in self.cells_to_replace:
-                if (row, col) != self.kitty_pos:  # Don't place fruit where kitty is
-                    self.board[row][col] = random.choice(self.fruits)
+            # Add bones if needed (every 2 moves)
+            if self.should_add_bones and not self.game_over:
+                self.add_bones()
+                self.should_add_bones = False
             
-            # Fill the old kitty position with a fruit (if it's not part of the cells to replace)
+            # Replace collected foods with new ones (except kitty's final position)
+            for row, col in self.cells_to_replace:
+                if (row, col) != self.kitty_pos:  # Don't place food where kitty is
+                    self.board[row][col] = random.choice(self.foods)
+            
+            # Fill the old kitty position with a food (if it's not part of the cells to replace)
             if self.old_kitty_pos and self.old_kitty_pos not in self.cells_to_replace:
                 old_row, old_col = self.old_kitty_pos
-                self.board[old_row][old_col] = random.choice(self.fruits)
+                self.board[old_row][old_col] = random.choice(self.foods)
             
             # Score is already updated in update_kitty_animation, no need to update it again here
             
@@ -805,7 +915,7 @@ class Game:
             if self.final_move:
                 # Set game over state
                 self.game_over = True
-                self.game_won = self.fruits_collected >= FRUIT_GOAL
+                self.game_won = self.fruits_collected >= FOOD_GOAL
                 
                 # Calculate stars earned
                 self.calculate_stars()
@@ -831,7 +941,7 @@ class Game:
         if not self.score_animation_active:
             return
             
-        # Keep the popup visible for 1.5 seconds after fruit replacement (50% faster than before)
+        # Keep the popup visible for 1.5 seconds after food replacement (50% faster than before)
         if not self.kitty_animation_active and not self.fruit_replacement_active:
             elapsed = time.time() - self.points_popup_time
             if elapsed > 1.0:  # Start fading after 1 second (was 2)
@@ -844,8 +954,7 @@ class Game:
                     # Animation complete
                     self.score_animation_active = False
                     self.points_popup_alpha = 0
-
-
+    
     def run(self):
         running = True
         
@@ -863,60 +972,12 @@ class Game:
                     
                     # Check if collect button was clicked
                     if self.collect_button_rect.collidepoint(pos):
-                        self.collect_fruits()
+                        self.collect_foods()
                         continue
                         
-                    # Convert position to grid coordinates
-                    col = (pos[0] - MARGIN) // (CELL_SIZE + MARGIN)
-                    row = (pos[1] - MARGIN) // (CELL_SIZE + MARGIN)
-                    
-                    # Check if click is within the grid
-                    if 0 <= row < GRID_SIZE and 0 <= col < GRID_SIZE:
-                        # Check if cell is already selected
-                        if (row, col) in self.selected_cells:
-                            # Find the index of the clicked cell in the selection
-                            index = self.selected_cells.index((row, col))
-                            # Remove this cell and all cells after it
-                            self.selected_cells = self.selected_cells[:index]
-                        # Otherwise check if it's a valid selection
-                        elif self.is_valid_selection(row, col):
-                            self.selected_cells.append((row, col))
-            
-            # Draw the board
-            self.draw_board()
-            
-            # Update display
-            pygame.display.flip()
-            
-            # Cap the frame rate
-            self.clock.tick(60)
-        
-        pygame.quit()
-        sys.exit()
-
-
-
-        
-        while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                    
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_r and self.game_over:  # Restart game
-                        self.reset_game()
-                        
-                elif event.type == pygame.MOUSEBUTTONDOWN and not self.game_over:
-                    pos = pygame.mouse.get_pos()
-                    
-                    # Check if collect button was clicked
-                    if self.collect_button_rect.collidepoint(pos):
-                        self.collect_fruits()
-                        continue
-                        
-                    # Convert position to grid coordinates
-                    col = (pos[0] - MARGIN) // (CELL_SIZE + MARGIN)
-                    row = (pos[1] - MARGIN) // (CELL_SIZE + MARGIN)
+                    # Convert position to grid coordinates, accounting for offset
+                    col = (pos[0] - BOARD_OFFSET_X - MARGIN) // (CELL_SIZE + MARGIN)
+                    row = (pos[1] - BOARD_OFFSET_Y - MARGIN) // (CELL_SIZE + MARGIN)
                     
                     # Check if click is within the grid
                     if 0 <= row < GRID_SIZE and 0 <= col < GRID_SIZE:
@@ -945,5 +1006,3 @@ class Game:
 if __name__ == "__main__":
     game = Game()
     game.run() 
-
-
