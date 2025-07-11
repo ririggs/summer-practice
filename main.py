@@ -1,4 +1,4 @@
-import pygame
+пimport pygame
 import sys
 import random
 import time
@@ -1195,7 +1195,7 @@ class MainMenu:
             self.screen.fill(WHITE)
             
             # Draw title
-            title_text = self.title_font.render("Kitty Food Game", True, DARK_BLUE)
+            title_text = self.title_font.render("Kitty Snack Sprint", True, DARK_BLUE)
             title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 4))
             self.screen.blit(title_text, title_rect)
             
@@ -1216,7 +1216,7 @@ class MainMenu:
 class Game:
     def __init__(self):
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption("Fruit Collection Game")
+        pygame.display.set_caption("Kitty Snack Sprint")
         
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("Arial", 24)
@@ -2178,7 +2178,7 @@ class Game:
 if __name__ == "__main__":
     # Initialize pygame window
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("Kitty Food Game")
+    pygame.display.set_caption("Kitty Snack Sprint")
     
     # Start with main menu
     menu = MainMenu(screen)
